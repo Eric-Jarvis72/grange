@@ -1,0 +1,617 @@
+{
+  "version": 1,
+  "format": "webp",
+  "terrainSheet": {
+    "file": "terrain.webp",
+    "width": 256,
+    "height": 256,
+    "columns": 4,
+    "rows": 4,
+    "tileWidth": 64,
+    "tileHeight": 64
+  },
+  "terrain": [
+    {
+      "name": "grass",
+      "file": "terrain/grass.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 0,
+        "row": 0
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "grass-tufts",
+      "file": "terrain/grass-tufts.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 1,
+        "row": 0
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "grass-flowers",
+      "file": "terrain/grass-flowers.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 2,
+        "row": 0
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "dirt",
+      "file": "terrain/dirt.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 3,
+        "row": 0
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-horizontal",
+      "file": "terrain/path-horizontal.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 0,
+        "row": 1
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-vertical",
+      "file": "terrain/path-vertical.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 1,
+        "row": 1
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-cross",
+      "file": "terrain/path-cross.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 2,
+        "row": 1
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-corner-ne",
+      "file": "terrain/path-corner-ne.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 3,
+        "row": 1
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-corner-sw-a",
+      "file": "terrain/path-corner-sw-a.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 0,
+        "row": 2
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-corner-sw-b",
+      "file": "terrain/path-corner-sw-b.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 1,
+        "row": 2
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "path-corner-nw",
+      "file": "terrain/path-corner-nw.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 2,
+        "row": 2
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "tilled-dry",
+      "file": "terrain/tilled-dry.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 3,
+        "row": 2
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "water",
+      "file": "terrain/water.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 0,
+        "row": 3
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "shore-north",
+      "file": "terrain/shore-north.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 1,
+        "row": 3
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "shore-east",
+      "file": "terrain/shore-east.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 2,
+        "row": 3
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "tilled-watered",
+      "file": "terrain/tilled-watered.webp",
+      "width": 64,
+      "height": 64,
+      "sheetFrame": {
+        "column": 3,
+        "row": 3
+      },
+      "anchor": [
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "plants": [
+    {
+      "name": "sprout",
+      "file": "plants/sprout.webp",
+      "width": 154,
+      "height": 106,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "leafy-greens",
+      "file": "plants/leafy-greens.webp",
+      "width": 240,
+      "height": 199,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "carrots",
+      "file": "plants/carrots.webp",
+      "width": 270,
+      "height": 260,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "cabbage",
+      "file": "plants/cabbage.webp",
+      "width": 274,
+      "height": 220,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "potato-plant",
+      "file": "plants/potato-plant.webp",
+      "width": 225,
+      "height": 179,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "tomato-plant",
+      "file": "plants/tomato-plant.webp",
+      "width": 252,
+      "height": 270,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "wheat",
+      "file": "plants/wheat.webp",
+      "width": 273,
+      "height": 267,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "pumpkin",
+      "file": "plants/pumpkin.webp",
+      "width": 292,
+      "height": 258,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "blue-flowers",
+      "file": "plants/blue-flowers.webp",
+      "width": 253,
+      "height": 241,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "daisies",
+      "file": "plants/daisies.webp",
+      "width": 270,
+      "height": 246,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "marigolds",
+      "file": "plants/marigolds.webp",
+      "width": 279,
+      "height": 239,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "white-flower-bush",
+      "file": "plants/white-flower-bush.webp",
+      "width": 275,
+      "height": 253,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "oak-tree",
+      "file": "plants/oak-tree.webp",
+      "width": 313,
+      "height": 323,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "pine-tree",
+      "file": "plants/pine-tree.webp",
+      "width": 257,
+      "height": 329,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "apple-tree",
+      "file": "plants/apple-tree.webp",
+      "width": 298,
+      "height": 323,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "sapling",
+      "file": "plants/sapling.webp",
+      "width": 183,
+      "height": 253,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    }
+  ],
+  "buildings": [
+    {
+      "name": "farmhouse",
+      "file": "buildings/farmhouse.webp",
+      "width": 581,
+      "height": 562,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "barn",
+      "file": "buildings/barn.webp",
+      "width": 587,
+      "height": 593,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "shed",
+      "file": "buildings/shed.webp",
+      "width": 455,
+      "height": 474,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "greenhouse",
+      "file": "buildings/greenhouse.webp",
+      "width": 565,
+      "height": 512,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    }
+  ],
+  "objects": [
+    {
+      "name": "fence-horizontal",
+      "file": "objects/fence-horizontal.webp",
+      "width": 322,
+      "height": 184,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "fence-post",
+      "file": "objects/fence-post.webp",
+      "width": 135,
+      "height": 229,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "fence-corner",
+      "file": "objects/fence-corner.webp",
+      "width": 267,
+      "height": 205,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "fence-gate",
+      "file": "objects/fence-gate.webp",
+      "width": 314,
+      "height": 197,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "crate",
+      "file": "objects/crate.webp",
+      "width": 226,
+      "height": 210,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "barrel",
+      "file": "objects/barrel.webp",
+      "width": 206,
+      "height": 250,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "seed-bag",
+      "file": "objects/seed-bag.webp",
+      "width": 212,
+      "height": 245,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "hay-bale",
+      "file": "objects/hay-bale.webp",
+      "width": 300,
+      "height": 213,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "boulders",
+      "file": "objects/boulders.webp",
+      "width": 271,
+      "height": 186,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "stump",
+      "file": "objects/stump.webp",
+      "width": 267,
+      "height": 212,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "stepping-stones",
+      "file": "objects/stepping-stones.webp",
+      "width": 230,
+      "height": 188,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "watering-can",
+      "file": "objects/watering-can.webp",
+      "width": 261,
+      "height": 199,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "flower-pot",
+      "file": "objects/flower-pot.webp",
+      "width": 252,
+      "height": 260,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "sign",
+      "file": "objects/sign.webp",
+      "width": 203,
+      "height": 271,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "bench",
+      "file": "objects/bench.webp",
+      "width": 318,
+      "height": 222,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    },
+    {
+      "name": "well",
+      "file": "objects/well.webp",
+      "width": 291,
+      "height": 315,
+      "anchor": [
+        0.5,
+        1.0
+      ]
+    }
+  ],
+  "sources": [
+    "ChatGPT Image Sep 28, 2026, 10_29_54 PM-1.png",
+    "ChatGPT Image Sep 28, 2026, 10_29_55 PM-2.png",
+    "ChatGPT Image Sep 28, 2026, 10_29_56 PM-3.png",
+    "ChatGPT Image Sep 28, 2026, 10_29_56 PM-4.png"
+  ],
+  "processing": {
+    "quality": 92,
+    "alphaQuality": 100,
+    "alphaThreshold": 96,
+    "notes": "Low-alpha edge colors were decontaminated before encoding."
+  }
+}

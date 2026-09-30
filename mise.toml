@@ -1,3 +1,6 @@
 [tools]
 nodejs = "24"
 pnpm = "11"
+
+[tasks.start]
+run = "pnpm start"
