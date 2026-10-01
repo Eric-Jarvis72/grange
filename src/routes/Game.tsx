@@ -7,7 +7,7 @@ import type {
 } from "../../shared/types";
 import { isPlayable } from "../boardLayout";
 import GameBoard from "../components/GameBoard";
-import { emitJoinGame, emitLogin, emitSubmit } from "../socket";
+import { emitJoinGame, emitResume, emitSubmit, socket } from "../socket";
 import { useGameStore } from "../store";
 
 function targetIsValid(
@@ -46,27 +46,27 @@ export default function Game() {
 		if (!uuid) return;
 		const gameId = uuid;
 
-		function attemptJoin() {
-			emitJoinGame(gameId, (res) => {
+		// rebindAuth() may still be settling the socket, so wait for it to be
+		// connected before resuming, otherwise the join lands on a stale
+		// handshake that carries no session.
+		function joinWhenReady() {
+			if (!socket.connected) {
+				socket.once("connect", () => {
+					emitResume(() => doJoin(gameId));
+				});
+				return;
+			}
+			emitResume(() => doJoin(gameId));
+		}
+
+		function doJoin(id: string) {
+			emitJoinGame(id, (res) => {
 				if (res.ok) return;
-				const go = () => (username ? navigate("/dashboard") : navigate("/"));
-				if (res.error === "Game not found") {
-					go();
-				} else if (username) {
-					// Ensure the user exists on the server, then redirect.
-					emitLogin(username, () => go());
-				} else {
-					navigate("/");
-				}
+				navigate(username ? "/dashboard" : "/");
 			});
 		}
 
-		if (username) {
-			// Ensure the server knows this user before attempting to join.
-			emitLogin(username, () => attemptJoin());
-		} else {
-			attemptJoin();
-		}
+		joinWhenReady();
 	}, [uuid, username, navigate]);
 
 	// Hold the current snapshot while play events animate; otherwise follow the

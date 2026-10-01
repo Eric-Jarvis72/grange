@@ -10,6 +10,11 @@ WorkingDirectory=/home/grange/grange
 Environment=NODE_ENV=production
 Environment=PORT=3200
 Environment=PATH=%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin
+# Session/auth config. This file lives outside the repo, so nothing here is
+# committed: %h/.config/grange/env with lines like
+#   SESSION_TTL_DAYS=30
+#   RESET_KEY=<random>
+EnvironmentFile=-%h/.config/grange/env
 ExecStart=%h/.local/share/mise/shims/pnpm start
 Restart=on-failure
 RestartSec=3

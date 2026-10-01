@@ -21,6 +21,7 @@
     "@react-spring/konva": "^9.7.5",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^4.3.1",
+    "argon2": "^0.45.1",
     "excalibur": "0.32.0",
     "express": "^4.19.2",
     "konva": "^10.3.1",

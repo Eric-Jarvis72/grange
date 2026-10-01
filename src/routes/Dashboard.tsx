@@ -1,11 +1,13 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { logout } from "../auth";
 import {
 	emitCreateGame,
 	emitDeleteGame,
 	emitJoinGame,
 	emitLeaveGame,
 	requestGames,
+	socket,
 } from "../socket";
 import { useGameStore } from "../store";
 
@@ -17,10 +19,17 @@ export default function Dashboard() {
 	const navigate = useNavigate();
 
 	useEffect(() => {
-		requestGames();
+		// Wait for the socket: after sign-in it is reconnecting with the new
+		// session cookie, and emits sent before that would be rejected.
+		if (socket.connected) {
+			requestGames();
+			return;
+		}
+		socket.once("connect", () => requestGames());
 	}, []);
 
 	function onCreate() {
+		if (!socket.connected) return;
 		emitCreateGame((res) => {
 			if (res.ok && res.game) {
 				navigate(`/games/${res.game.id}`);
@@ -31,6 +40,7 @@ export default function Dashboard() {
 	}
 
 	function onJoin(gameId: string) {
+		if (!socket.connected) return;
 		emitJoinGame(gameId, (res) => {
 			if (res.ok && res.game) {
 				navigate(`/games/${res.game.id}`);
@@ -50,6 +60,11 @@ export default function Dashboard() {
 		});
 	}
 
+	async function onLogout() {
+		await logout();
+		navigate("/", { replace: true });
+	}
+
 	function onRejoin() {
 		if (myGameId) navigate(`/games/${myGameId}`);
 	}
@@ -65,12 +80,14 @@ export default function Dashboard() {
 						Logged in as <span className="text-leaf">{username}</span>
 					</p>
 				</div>
-				<Link
-					to="/"
+				<button
+					type="button"
+					data-testid="logout"
+					onClick={onLogout}
 					className="text-xs tracking-wider text-husk underline-offset-2 hover:text-leaf hover:underline"
 				>
-					Change user
-				</Link>
+					Sign out
+				</button>
 			</header>
 
 			{myGame && (

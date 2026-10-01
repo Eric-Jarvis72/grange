@@ -13,3 +13,35 @@
 	height: 100%;
 	image-rendering: pixelated;
 }
+
+.farm-map-bar {
+	position: absolute;
+	top: 0.75rem;
+	right: 0.75rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.35rem 0.6rem;
+	border: 1px solid rgba(58, 44, 30, 0.55);
+	border-radius: 0.375rem;
+	background: rgba(38, 28, 20, 0.82);
+	color: #f3e7d0;
+	font-size: 0.75rem;
+	letter-spacing: 0.05em;
+}
+
+.farm-map-user {
+	color: #a7c957;
+}
+
+.farm-map-signout {
+	color: #f3e7d0;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	text-underline-offset: 2px;
+}
+
+.farm-map-signout:hover {
+	color: #a7c957;
+	text-decoration: underline;
+}

@@ -16,7 +16,7 @@ export interface Ack {
 	error?: string;
 }
 
-export interface LoginAck extends Ack {
+export interface ResumeAck extends Ack {
 	player?: Player;
 }
 
@@ -26,11 +26,12 @@ export interface GameAck extends Ack {
 	removed?: boolean;
 }
 
-export function emitLogin(
-	username: string,
-	cb?: (res: LoginAck) => void,
-): void {
-	socket.emit("login", { username }, cb);
+/**
+ * Re-establishes game room membership after a reconnect. Identity is not sent -
+ * the server reads it from the session cookie on the socket handshake.
+ */
+export function emitResume(cb?: (res: ResumeAck) => void): void {
+	socket.emit("resume", cb);
 }
 
 export function requestGames(): void {
@@ -68,7 +69,18 @@ export function emitSubmit(
 	socket.emit("submit", { choice }, cb);
 }
 
-/** Registers global socket listeners and restores a saved session, if any. */
+/**
+ * Forces a fresh socket so the io.use() handshake re-runs with the new session
+ * cookie. The initial connection happens before sign-in, so without this the
+ * server would never learn who the user is and every game event would be
+ * rejected as "not logged in".
+ */
+export function rebindAuth(): void {
+	socket.disconnect();
+	socket.connect();
+}
+
+/** Registers global socket listeners. */
 export function initSocket(): void {
 	socket.on("players", ({ players }: { players: Player[] }) => {
 		useGameStore.getState().setPlayers(players);
@@ -100,8 +112,10 @@ export function initSocket(): void {
 		if (st.myGameId === gameId) st.setMyGameId(null);
 	});
 
-	const saved = localStorage.getItem("grange.username");
-	if (saved) {
-		emitLogin(saved);
-	}
+	// rebindAuth() forces a fresh handshake after sign-in or sign-out, and
+	// reconnection does the same on its own. Either way the server has just
+	// re-resolved the session cookie, so ask it to restore game membership.
+	socket.on("connect", () => {
+		if (useGameStore.getState().user) emitResume();
+	});
 }

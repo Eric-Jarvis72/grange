@@ -41,18 +41,20 @@ export function registerSocketHandlers(
 	io.on("connection", (socket) => {
 		const data = socket.data as SocketData;
 
-		socket.on("login", (payload: unknown, cb?: (res: unknown) => void) => {
-			const name = String(
-				(payload as { username?: unknown } | undefined)?.username ?? "",
-			).trim();
+		// Identity is established by the io.use() handshake from the session
+		// cookie, not by a client-supplied name. This handler only re-establishes
+		// game room membership after a reconnect, and always trusts socket.data.
+		socket.on("resume", (cb?: (res: unknown) => void) => {
+			const name = loggedInName(socket);
 			if (!name) {
-				cb?.({ ok: false, error: "username is required" });
+				cb?.({ ok: false, error: "not logged in" });
 				return;
 			}
 
+			// Safe to auto-create now: `name` came from the verified session cookie
+			// rather than client input, so a stranger can no longer mint a player
+			// for someone else's name.
 			const player = getOrCreatePlayer(state, name);
-			data.username = name;
-
 			cb?.({ ok: true, player });
 			broadcastPlayers();
 			socket.emit("games", { games: summarizeGames(state) });
