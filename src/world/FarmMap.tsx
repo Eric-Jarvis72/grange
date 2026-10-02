@@ -1,8 +1,9 @@
 import * as ex from "excalibur";
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { logout } from "../auth";
-import { useGameStore } from "../store";
+import { Hud } from "../inventory/Hud";
+import { InventoryPanel } from "../inventory/InventoryPanel";
+import "../inventory/inventory.css";
+import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { FarmMapScene } from "./FarmMapScene";
 import "./farmMap.css";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
@@ -10,8 +11,7 @@ import { resources } from "./resources";
 
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const username = useGameStore((s) => s.username);
-	const navigate = useNavigate();
+	useInventoryKeys();
 
 	useEffect(() => {
 		const canvas = canvasRef.current;
@@ -44,11 +44,6 @@ export default function FarmMap() {
 		};
 	}, []);
 
-	async function onSignOut() {
-		await logout();
-		navigate("/", { replace: true });
-	}
-
 	return (
 		<main className="farm-map-page">
 			<canvas
@@ -56,19 +51,8 @@ export default function FarmMap() {
 				className="farm-map-canvas"
 				aria-label="Farm map with buildings, an empty field, paths, trees, and water"
 			/>
-			<div className="farm-map-bar">
-				<span className="farm-map-user" data-testid="farm-map-user">
-					{username}
-				</span>
-				<button
-					type="button"
-					data-testid="logout"
-					onClick={onSignOut}
-					className="farm-map-signout"
-				>
-					Sign out
-				</button>
-			</div>
+			<Hud />
+			<InventoryPanel />
 		</main>
 	);
 }

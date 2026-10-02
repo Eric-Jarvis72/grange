@@ -1,4 +1,5 @@
 import * as ex from "excalibur";
+import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { InputManager } from "./InputManager";
 import {
     MAP_COLUMNS,
@@ -84,6 +85,12 @@ export class FarmMapScene extends ex.Scene {
     }
 
     override onPreUpdate(_engine: ex.Engine, _delta: number): void {
+        // Freeze movement while the inventory modal captures input.
+        if (isInventoryBlockingInput()) {
+            this.player.vel = ex.vec(0, 0);
+            return;
+        }
+
         // Poll input vector (normalized -1 to 1)
         const dir = this.inputManager.getMovementVector();
 
