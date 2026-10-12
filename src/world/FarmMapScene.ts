@@ -1,15 +1,14 @@
 import * as ex from "excalibur";
 import type { FarmTileState, FarmToolId } from "../../shared/farm";
 import { isFarmInBounds } from "../../shared/farm";
-import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { emitFarmAction } from "../socket";
 import { useGameStore } from "../store";
 import {
-	BlockRegistry,
-	decorByTile,
-	groundFootprintTiles,
-	rectFootprintTiles,
-} from "./blocking";
+	countItem,
+	isInventoryBlockingInput,
+	useInventoryStore,
+} from "../inventory/inventoryStore";
+import { BlockRegistry, decorByTile } from "./blocking";
 import { CropLayer } from "./cropLayer";
 import { FarmTravel } from "./FarmTravel";
 import type { FarmHoveredTile, FarmHudSnapshot } from "./farmHud";
@@ -22,13 +21,13 @@ import {
 	MAP_HEIGHT,
 	MAP_ROWS,
 	MAP_WIDTH,
-	propBlocking,
 	props,
 	TILE_SIZE,
 	terrainAt,
 } from "./mapData";
 import { updateFarmPlayer } from "./playerMovement";
-import { propImages, terrainFrames, terrainImage } from "./resources";
+import { addFarmProps } from "./propLayer";
+import { terrainFrames, terrainImage } from "./resources";
 import { clearDecorAt, refreshTile } from "./tileSync";
 import type { WorldArea } from "./WalkingScene";
 
@@ -106,34 +105,7 @@ export class FarmMapScene extends ex.Scene {
 		this.add(this.terrain);
 
 		// 3. Populate Props and register their tool-blocked tiles
-		props.forEach((prop, index) => {
-			const source = propImages[prop.asset];
-			const sprite = source.toSprite();
-			const scale = prop.width / source.width;
-			sprite.scale = ex.vec(scale, scale);
-
-			const actor = new ex.Actor({
-				pos: ex.vec(prop.x, prop.y),
-				anchor: ex.vec(0.5, 1),
-				z: 100 + Math.floor(prop.y),
-			});
-			actor.graphics.use(sprite);
-			this.add(actor);
-			this.propActors[index] = actor;
-
-			const rule = propBlocking[prop.asset];
-			if (rule === "rect") {
-				this.blocks.add(
-					`prop-${index}`,
-					rectFootprintTiles(prop.x, prop.y, prop.width, source.height * scale),
-				);
-			} else if (rule === "base") {
-				this.blocks.add(
-					`prop-${index}`,
-					groundFootprintTiles(prop.x, prop.y, prop.width),
-				);
-			}
-		});
+		addFarmProps(this, this.blocks, this.propActors);
 
 		// 4. Create Player Actor
 		this.player = new ex.Actor({
@@ -221,11 +193,33 @@ export class FarmMapScene extends ex.Scene {
 		const row = Math.floor(this.player.pos.y / TILE_SIZE);
 		if (!isFarmInBounds(column, row)) return;
 		const tool = useGameStore.getState().tool;
+		if (tool === "seed" && !this.consumeSeedAt(column, row)) return;
 		emitFarmAction(this.owner, {
 			kind: TOOL_KIND[tool],
 			x: column,
 			y: row,
 		});
+	}
+
+	/** Spends one seed to plant at (column, row). Returns false (with a HUD
+	 * message) when the tile is not tilled or the player is out of seeds. */
+	private consumeSeedAt(column: number, row: number): boolean {
+		const tile = useGameStore
+			.getState()
+			.activeFarm?.tiles.find((t) => t.x === column && t.y === row);
+		if (tile?.state !== "tilled") {
+			this.message = "Plant seeds in tilled soil.";
+			this.emitHud();
+			return false;
+		}
+		const inventory = useInventoryStore.getState();
+		if (countItem(inventory, "seed-bag") < 1) {
+			this.message = "Out of seeds — buy more at the market.";
+			this.emitHud();
+			return false;
+		}
+		inventory.removeItem("seed-bag", 1);
+		return true;
 	}
 
 	private applyToolAt(worldPos: ex.Vector): void {
@@ -268,6 +262,8 @@ export class FarmMapScene extends ex.Scene {
 			this.emitHud();
 			return;
 		}
+
+		if (tool === "seed" && !this.consumeSeedAt(column, row)) return;
 
 		emitFarmAction(this.owner, {
 			kind: TOOL_KIND[tool],

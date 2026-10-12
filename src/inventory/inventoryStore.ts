@@ -26,10 +26,7 @@ function stack(itemId: ItemId, count: number): InventorySlot {
 }
 
 function buildInitialGrid(): InventorySlot[] {
-	const grid = Array.from({ length: GRID_SIZE }, emptySlot);
-	grid[0] = stack("tomato", 12);
-	grid[1] = stack("seed-bag", 20);
-	return grid;
+	return Array.from({ length: GRID_SIZE }, emptySlot);
 }
 
 function buildInitialHotbar(): InventorySlot[] {
@@ -38,7 +35,6 @@ function buildInitialHotbar(): InventorySlot[] {
 	hotbar[1] = stack("seed-bag", 10);
 	hotbar[2] = stack("watering-can", 1);
 	hotbar[3] = stack("scythe", 1);
-	hotbar[4] = stack("tomato", 5);
 	return hotbar;
 }
 
@@ -53,6 +49,8 @@ interface InventoryState {
 	moveStack: (from: SlotRef, to: SlotRef) => void;
 	splitHalf: (from: SlotRef, to: SlotRef) => void;
 	addItem: (itemId: ItemId, count: number) => number;
+	/** Removes up to `count` of an item across slots. Returns how many were removed. */
+	removeItem: (itemId: ItemId, count: number) => number;
 	removeAt: (ref: SlotRef, count: number) => void;
 	resetInventory: () => void;
 }
@@ -169,6 +167,28 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 		}
 		set({ grid: nextGrid, hotbar: nextHotbar });
 		return remaining;
+	},
+
+	removeItem: (itemId, count) => {
+		if (count <= 0) return 0;
+		const nextGrid = [...get().grid];
+		const nextHotbar = [...get().hotbar];
+		let remaining = count;
+		const areas: InventorySlot[][] = [nextHotbar, nextGrid];
+		for (const list of areas) {
+			for (let i = 0; i < list.length && remaining > 0; i += 1) {
+				const slot = list[i];
+				if (slot.itemId !== itemId) continue;
+				const take = Math.min(slot.count, remaining);
+				list[i] =
+					slot.count - take <= 0
+						? emptySlot()
+						: { itemId, count: slot.count - take };
+				remaining -= take;
+			}
+		}
+		set({ grid: nextGrid, hotbar: nextHotbar });
+		return count - remaining;
 	},
 
 	removeAt: (ref, count) => {

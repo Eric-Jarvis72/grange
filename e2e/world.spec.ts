@@ -114,14 +114,14 @@ test("the seed market opens a window with a seeds tab", async ({ page }) => {
 	await expect(page.getByTestId("market-item-tomato-seed")).toContainText(
 		"Tomato Seeds",
 	);
-	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("0");
+	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("10");
 	// The grid has 8 cells; one is filled by the tomato seed card.
 	await expect(page.getByTestId("market-slot")).toHaveCount(7);
 	await expect(page.getByTestId("farm-balance")).toContainText("100");
 
 	await page.getByTestId("market-action-tomato-seed").click();
 	await expect(page.getByTestId("farm-balance")).toContainText("99");
-	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("10");
+	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("20");
 
 	await page.keyboard.press("Escape");
 	await expect(market).toHaveCount(0);

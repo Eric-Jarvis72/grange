@@ -25,7 +25,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 		name: "Hoe",
 		kind: "tool",
 		maxStack: 1,
-		icon: "⛏️",
+		icon: "/assets/farm/objects/hoe.svg",
 		description: "Till soil for planting.",
 	},
 	"watering-can": {
@@ -41,7 +41,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 		name: "Scythe",
 		kind: "tool",
 		maxStack: 1,
-		icon: "🌾",
+		icon: "/assets/farm/objects/scythe.svg",
 		description: "Harvest ready crops.",
 	},
 	"seed-bag": {

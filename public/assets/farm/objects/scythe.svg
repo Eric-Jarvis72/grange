@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Snath (handle) -->
+  <rect x="18" y="5" width="3.5" height="25" transform="rotate(11 20 6)" fill="#c98a3c" stroke="#7a4a1c" stroke-width="1"/>
+  <!-- Long sweeping blade attached at the top of the snath -->
+  <path d="M20 4 Q8 2 2.5 15 Q11 7 20 8.5 Z" fill="#c6ccd4" stroke="#5c636e" stroke-width="1"/>
+  <path d="M19.5 5 Q10 3.5 4 13.5 Q11 8 19.5 8.5 Z" fill="#e8edf3"/>
+</svg>

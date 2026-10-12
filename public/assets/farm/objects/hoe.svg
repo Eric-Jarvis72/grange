@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Handle (bottom-left to top-right) -->
+  <g transform="rotate(42 16 16)">
+    <rect x="15" y="3" width="3.5" height="22" fill="#c98a3c" stroke="#7a4a1c" stroke-width="1"/>
+    <!-- Blade: flat head angled off the handle end, sweeping to one side -->
+    <g transform="rotate(-32 16 24)">
+      <rect x="3.5" y="22.5" width="13" height="4" rx="0.5" fill="#b8bec7" stroke="#5c636e" stroke-width="1"/>
+      <rect x="3.5" y="22.5" width="2.5" height="4" fill="#8f959d"/>
+    </g>
+  </g>
+</svg>

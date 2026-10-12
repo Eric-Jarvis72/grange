@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { countItem, useInventoryStore } from "../inventory/inventoryStore";
 import { emitSellTomatoes } from "../socket";
 import { useGameStore } from "../store";
 import { economy } from "./EconomyManager";
@@ -12,8 +13,8 @@ import { useEconomyBalance } from "./useEconomy";
  */
 export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 	const farm = useGameStore((s) => s.activeFarm);
-	const tomatoSeeds = useGameStore((s) => s.tomatoSeeds);
-	const addTomatoSeeds = useGameStore((s) => s.addTomatoSeeds);
+	const addItem = useInventoryStore((s) => s.addItem);
+	const seedBags = useInventoryStore((s) => countItem(s, "seed-bag"));
 	const balance = useEconomyBalance();
 	const [market, setMarket] = useState<MarketId | null>(null);
 	const [marketMessage, setMarketMessage] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 			setMarketMessage(result.error ?? "Purchase failed.");
 			return;
 		}
-		addTomatoSeeds(item.quantity);
+		addItem("seed-bag", item.quantity);
 		setMarketMessage(
 			`Bought ${item.quantity} tomato seeds for $${item.price}.`,
 		);
@@ -54,7 +55,7 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 
 	const itemControls: Record<MarketItemId, MarketItemControl> = {
 		"tomato-seed": {
-			owned: tomatoSeeds,
+			owned: seedBags,
 			disabled: balance < MARKET_ITEMS["tomato-seed"].price,
 			actionLabel: "Buy",
 			onAction: buyTomatoSeeds,

@@ -10,6 +10,32 @@ async function clickTile(page: Page, col: number, row: number) {
 	await page.mouse.click(x, y);
 }
 
+/** Samples a rendered tile's center pixel from a canvas screenshot. */
+async function tilePixel(page: Page, col: number, row: number) {
+	const buf = await page.locator(".farm-map-canvas").screenshot();
+	const b64 = buf.toString("base64");
+	return page.evaluate(
+		async ({ b64, xf, yf }) => {
+			const img = new Image();
+			img.src = `data:image/png;base64,${b64}`;
+			await img.decode();
+			const canvas = document.createElement("canvas");
+			canvas.width = img.width;
+			canvas.height = img.height;
+			const ctx = canvas.getContext("2d")!;
+			ctx.drawImage(img, 0, 0);
+			const d = ctx.getImageData(
+				Math.floor(xf * img.width),
+				Math.floor(yf * img.height),
+				1,
+				1,
+			).data;
+			return { r: d[0], g: d[1], b: d[2] };
+		},
+		{ b64, xf: (col + 0.5) / 18, yf: (row + 0.5) / 12 },
+	);
+}
+
 test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Sprout"));
@@ -27,6 +53,11 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	await expect(page.getByTestId("slot-hotbar-1")).toHaveClass(/inv-slot-selected/);
 	await clickTile(page, 9, 7);
 	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): planted");
+	// Planting spends one tomato seed from the pouch (10 -> 9).
+	await expect(page.getByTestId("slot-hotbar-1")).toHaveAttribute(
+		"data-count",
+		"9",
+	);
 
 	// Bucket
 	await page.keyboard.press("3");
@@ -39,11 +70,11 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	});
 	await page.keyboard.press("4");
 	await clickTile(page, 9, 7);
-	// Harvested tomatoes land in the physical inventory: hotbar slot 5 (tomato)
-	// grows from 5 to 8.
+	// Harvested tomatoes land in the first free inventory slot: hotbar 5 (tomato)
+	// receives the 3-tomato yield.
 	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
 		"data-count",
-		"8",
+		"3",
 	);
 	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): tilled");
 
@@ -140,4 +171,21 @@ test("a visitor sees another farm read-only", async ({ page }) => {
 
 	await expect(page.locator("canvas[aria-label^='Farm map']")).toBeVisible();
 	await expect(page.getByTestId("notification-feed")).toContainText("Visiting");
+});
+
+test("tilled soil renders as brown dirt, not grass", async ({ page }) => {
+	await resetServer();
+	await register(page, uniqueName("Soil"));
+
+	const grass = await tilePixel(page, 9, 7);
+	// Grass is green-dominant.
+	expect(grass.g).toBeGreaterThan(grass.r);
+
+	await clickTile(page, 9, 7);
+	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): tilled");
+
+	// Tilled-dry soil is brown: red dominant over green and blue.
+	const soil = await tilePixel(page, 9, 7);
+	expect(soil.r).toBeGreaterThan(soil.g + 20);
+	expect(soil.r).toBeGreaterThan(soil.b + 20);
 });

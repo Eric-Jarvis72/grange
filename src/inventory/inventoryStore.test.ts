@@ -6,13 +6,17 @@ beforeEach(() => {
 });
 
 describe("inventory slots", () => {
-	it("seeds a stub hotbar and grid", () => {
+	it("starts with tools and a small seed pouch, no crops", () => {
 		const { hotbar, grid } = useInventoryStore.getState();
 		expect(hotbar).toHaveLength(10);
 		expect(grid).toHaveLength(24);
 		expect(hotbar[0]).toMatchObject({ itemId: "hoe", count: 1 });
-		expect(grid[0]).toMatchObject({ itemId: "tomato", count: 12 });
-		expect(countItem(useInventoryStore.getState(), "tomato")).toBe(17);
+		expect(hotbar[1]).toMatchObject({ itemId: "seed-bag", count: 10 });
+		expect(hotbar[2]).toMatchObject({ itemId: "watering-can", count: 1 });
+		expect(hotbar[3]).toMatchObject({ itemId: "scythe", count: 1 });
+		expect(countItem(useInventoryStore.getState(), "seed-bag")).toBe(10);
+		expect(countItem(useInventoryStore.getState(), "tomato")).toBe(0);
+		expect(grid.every((slot) => slot.itemId === null)).toBe(true);
 	});
 
 	it("keeps no currency item in slots", () => {
@@ -32,20 +36,20 @@ describe("inventory slots", () => {
 	});
 
 	it("merges partial stacks of the same item", () => {
-		const { moveStack } = useInventoryStore.getState();
-		// hotbar[1] is 10 seeds, grid[1] is 20 seeds.
-		moveStack({ area: "hotbar", index: 1 }, { area: "grid", index: 1 });
-		const { hotbar, grid } = useInventoryStore.getState();
-		expect(grid[1]).toMatchObject({ itemId: "seed-bag", count: 30 });
+		const store = useInventoryStore.getState();
+		store.splitHalf({ area: "hotbar", index: 1 }, { area: "grid", index: 0 });
+		store.moveStack({ area: "hotbar", index: 1 }, { area: "grid", index: 0 });
+		const { grid, hotbar } = useInventoryStore.getState();
+		expect(grid[0]).toMatchObject({ itemId: "seed-bag", count: 10 });
 		expect(hotbar[1]?.itemId).toBeNull();
 	});
 
 	it("swaps two different items", () => {
 		const { moveStack } = useInventoryStore.getState();
-		moveStack({ area: "hotbar", index: 0 }, { area: "hotbar", index: 4 });
+		moveStack({ area: "hotbar", index: 0 }, { area: "hotbar", index: 2 });
 		const { hotbar } = useInventoryStore.getState();
-		expect(hotbar[0]).toMatchObject({ itemId: "tomato" });
-		expect(hotbar[4]).toMatchObject({ itemId: "hoe" });
+		expect(hotbar[0]).toMatchObject({ itemId: "watering-can" });
+		expect(hotbar[2]).toMatchObject({ itemId: "hoe" });
 	});
 
 	it("never merges non-stackable tools", () => {
@@ -59,10 +63,21 @@ describe("inventory slots", () => {
 
 	it("splits half of a stack into an empty slot", () => {
 		const { splitHalf } = useInventoryStore.getState();
-		splitHalf({ area: "grid", index: 0 }, { area: "grid", index: 10 });
-		const { grid } = useInventoryStore.getState();
-		expect(grid[10]).toMatchObject({ itemId: "tomato", count: 6 });
-		expect(grid[0]).toMatchObject({ itemId: "tomato", count: 6 });
+		splitHalf({ area: "hotbar", index: 1 }, { area: "grid", index: 0 });
+		const { grid, hotbar } = useInventoryStore.getState();
+		expect(grid[0]).toMatchObject({ itemId: "seed-bag", count: 5 });
+		expect(hotbar[1]).toMatchObject({ itemId: "seed-bag", count: 5 });
+	});
+
+	it("removes items across slots and empties drained ones", () => {
+		const store = useInventoryStore.getState();
+		expect(store.removeItem("seed-bag", 4)).toBe(4);
+		expect(countItem(useInventoryStore.getState(), "seed-bag")).toBe(6);
+		// Missing items remove nothing.
+		expect(store.removeItem("tomato", 1)).toBe(0);
+
+		expect(store.removeItem("seed-bag", 6)).toBe(6);
+		expect(useInventoryStore.getState().hotbar[1]?.itemId).toBeNull();
 	});
 
 	it("selects hotbar slots and toggles the panel", () => {
