@@ -121,13 +121,13 @@ test("the seed market opens a window with a seeds tab", async ({ page }) => {
 		"Tomato Seeds",
 	);
 	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("10");
-	// The grid has 8 cells; one is filled by the tomato seed card.
-	await expect(page.getByTestId("market-slot")).toHaveCount(7);
+	// The grid has 8 cells; three are filled by the seed cards.
+	await expect(page.getByTestId("market-slot")).toHaveCount(5);
 	await expect(page.getByTestId("farm-balance")).toContainText("100");
 
 	await page.getByTestId("market-action-tomato-seed").click();
-	await expect(page.getByTestId("farm-balance")).toContainText("99");
-	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("20");
+	await expect(page.getByTestId("farm-balance")).toContainText("92");
+	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("11");
 
 	await page.keyboard.press("Escape");
 	await expect(market).toHaveCount(0);
@@ -168,14 +168,14 @@ test("the produce market opens sell, tools, and train tabs", async ({
 	await expect(page.getByTestId("market-tab-sell")).toBeVisible();
 	await expect(page.getByTestId("market-tab-tools")).toBeVisible();
 	await expect(page.getByTestId("market-tab-train")).toBeVisible();
-	await expect(page.getByTestId("market-item-tomato")).toContainText("Tomatoes");
+	await expect(page.getByTestId("market-item-tomato")).toContainText("Tomato");
 	await expect(page.getByTestId("market-owned-tomato")).toContainText("0");
 	// Nothing harvested yet, so selling is unavailable.
 	await expect(page.getByTestId("market-action-tomato")).toBeDisabled();
 	await expect(page.getByTestId("market-max-tomato")).toBeVisible();
 	await expect(page.getByTestId("market-max-tomato")).toBeDisabled();
-	// The grid has 12 cells; one is filled by the tomato card.
-	await expect(page.getByTestId("market-slot")).toHaveCount(11);
+	// The grid has 12 cells; six are filled by the produce cards.
+	await expect(page.getByTestId("market-slot")).toHaveCount(6);
 
 	await page.getByTestId("market-tab-tools").click();
 	await expect(page.getByTestId("market-slot")).toHaveCount(8);
@@ -206,7 +206,7 @@ test("farm world shows the starting balance HUD", async ({ page }) => {
 	await expect(balance).toContainText("100");
 });
 
-test("selling a chosen number of tomatoes uses the quantity stepper", async ({
+test("selling a harvested tomato credits the wallet", async ({
 	page,
 }) => {
 	await resetServer();
@@ -225,11 +225,11 @@ test("selling a chosen number of tomatoes uses the quantity stepper", async ({
 	await page.keyboard.press("3");
 	await page.keyboard.press("Space");
 
-	// Wait out the 10s growth, then harvest for 3 tomatoes.
+	// Wait out the 10s growth, then harvest for one tomato.
 	await page.waitForTimeout(12_000);
 	await page.keyboard.press("4");
 	await page.keyboard.press("Space");
-	await expect(page.getByTestId("farm-tomatoes")).toContainText("3");
+	await expect(page.getByTestId("farm-tomatoes")).toContainText("1");
 
 	// Travel to the marketplace and open the produce market.
 	await page.keyboard.down("d");
@@ -250,21 +250,12 @@ test("selling a chosen number of tomatoes uses the quantity stepper", async ({
 
 	const market = page.getByTestId("market-window");
 	await expect(market).toBeVisible();
-	await expect(page.getByTestId("market-owned-tomato")).toContainText("3");
-
-	// Sell exactly two of them.
-	await page.getByTestId("market-inc-tomato").click();
-	await expect(page.getByTestId("market-qty-tomato")).toHaveValue("2");
-	await page.getByTestId("market-action-tomato").click();
 	await expect(page.getByTestId("market-owned-tomato")).toContainText("1");
-	await expect(page.getByTestId("farm-balance")).toContainText("102");
 
-	// Max fills the stepper with everything left, then sells it.
-	await page.getByTestId("market-max-tomato").click();
-	await expect(page.getByTestId("market-qty-tomato")).toHaveValue("1");
+	// Sell the single tomato for its crop value.
 	await page.getByTestId("market-action-tomato").click();
 	await expect(page.getByTestId("market-owned-tomato")).toContainText("0");
-	await expect(page.getByTestId("farm-balance")).toContainText("103");
+	await expect(page.getByTestId("farm-balance")).toContainText("105");
 	await expect(page.getByTestId("market-action-tomato")).toBeDisabled();
 });
 

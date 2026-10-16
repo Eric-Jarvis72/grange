@@ -43,13 +43,13 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	});
 	await page.keyboard.press("4");
 	await clickFarmTile(page, 9, 7);
-	// Harvested tomatoes land in the first free inventory slot: hotbar 5 (tomato)
-	// receives the 3-tomato yield.
+	// The harvested tomato lands in the first free inventory slot (hotbar 5).
 	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
 		"data-count",
-		"3",
+		"1",
 	);
-	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): tilled");
+	// Tomatoes regrow, so the tile resumes growing instead of clearing.
+	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): watered");
 
 	// Drag-paint tills two tiles at once
 	await page.keyboard.press("1");

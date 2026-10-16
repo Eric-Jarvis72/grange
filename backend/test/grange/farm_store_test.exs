@@ -13,12 +13,20 @@ defmodule Grange.FarmStoreTest do
     FarmStore.view(owner).tiles |> Enum.find(&(&1.x == x and &1.y == y))
   end
 
+  defp grow(owner, x, y) do
+    FarmStore.action(owner, %{"kind" => "water", "x" => x, "y" => y})
+
+    future = System.system_time(:millisecond) + Farm.grow_ms() + 60_000
+    FarmStore.tick(future)
+  end
+
   test "ensure/1 creates a farm once" do
     refute FarmStore.has_farm?("Alice")
 
     view = FarmStore.ensure("Alice")
     assert view.owner == "Alice"
     assert view.tiles == []
+    assert view.barn == %{}
     assert view.tomatoes == 0
     assert FarmStore.has_farm?("Alice")
     assert FarmStore.ensure("Alice") == view
@@ -65,46 +73,66 @@ defmodule Grange.FarmStoreTest do
              FarmStore.action("Alice", %{"kind" => "dance", "x" => 1, "y" => 1})
   end
 
-  test "tick marks watered tiles ready and harvest yields tomatoes" do
+  test "harvesting banks produce in the barn and tomatoes regrow once" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 5, "y" => 5})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 5, "y" => 5})
-    FarmStore.action("Alice", %{"kind" => "water", "x" => 5, "y" => 5})
+    grow("Alice", 5, 5)
 
-    future = System.system_time(:millisecond) + Farm.grow_ms() + 60_000
-    assert ["Alice"] = FarmStore.tick(future)
     assert %{state: :ready} = tile_at("Alice", 5, 5)
-
     assert {:ok, view} = FarmStore.action("Alice", %{"kind" => "harvest", "x" => 5, "y" => 5})
-    assert view.tomatoes == Farm.harvest_yield()
-    assert %{state: :tilled} = tile_at("Alice", 5, 5)
+    assert view.barn["tomato"] == 1
+    assert view.tomatoes == 1
+    # Regrows instead of clearing.
+    assert %{state: :watered} = tile_at("Alice", 5, 5)
   end
 
-  test "selling tomatoes removes them from the barn" do
+  test "wheat cannot be harvested by hand and banks its own barn item" do
+    FarmStore.ensure("Alice")
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 2, "y" => 2})
+    FarmStore.action("Alice", %{"kind" => "plant", "x" => 2, "y" => 2, "crop" => "wheat"})
+    grow("Alice", 2, 2)
+
+    assert {:error, reason} =
+             FarmStore.action("Alice", %{"kind" => "harvest", "x" => 2, "y" => 2})
+
+    assert reason =~ "needs a scythe"
+
+    assert {:ok, view} =
+             FarmStore.action("Alice", %{
+               "kind" => "harvest",
+               "x" => 2,
+               "y" => 2,
+               "tool" => "scythe"
+             })
+
+    assert view.barn["wheat"] == 1
+    assert Map.get(view.barn, "tomato", 0) == 0
+    assert %{state: :tilled} = tile_at("Alice", 2, 2)
+  end
+
+  test "selling produce removes it from the barn" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 0, "y" => 0})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 0, "y" => 0})
-    FarmStore.action("Alice", %{"kind" => "water", "x" => 0, "y" => 0})
-
-    future = System.system_time(:millisecond) + Farm.grow_ms() + 60_000
-    FarmStore.tick(future)
+    grow("Alice", 0, 0)
     FarmStore.action("Alice", %{"kind" => "harvest", "x" => 0, "y" => 0})
 
-    assert {:ok, view} = FarmStore.sell_tomatoes("Alice", 2)
-    assert view.tomatoes == Farm.harvest_yield() - 2
+    assert {:ok, view} = FarmStore.sell("Alice", "tomato", 1)
+    assert view.tomatoes == 0
   end
 
-  test "selling more tomatoes than the barn holds is rejected" do
+  test "selling more than the barn holds is rejected" do
     FarmStore.ensure("Alice")
 
-    assert {:error, "not enough tomatoes"} = FarmStore.sell_tomatoes("Alice", 1)
+    assert {:error, "not enough tomato"} = FarmStore.sell("Alice", "tomato", 1)
   end
 
   test "selling a non-positive amount is rejected" do
     FarmStore.ensure("Alice")
 
-    assert {:error, "invalid count"} = FarmStore.sell_tomatoes("Alice", 0)
-    assert {:error, "invalid count"} = FarmStore.sell_tomatoes("Alice", -2)
+    assert {:error, "invalid sale"} = FarmStore.sell("Alice", "tomato", 0)
+    assert {:error, "invalid sale"} = FarmStore.sell("Alice", "tomato", -2)
   end
 
   test "actions outside the grid are rejected" do
@@ -114,7 +142,7 @@ defmodule Grange.FarmStoreTest do
              FarmStore.action("Alice", %{"kind" => "till", "x" => 99, "y" => 0})
   end
 
-  test "summaries report tile counts and tomatoes" do
+  test "summaries report tile counts and produce" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 0, "y" => 0})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 0, "y" => 0})

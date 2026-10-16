@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CROPS } from "../../shared/crops";
 import {
 	clampQuantity,
 	MARKET_CATEGORIES,
@@ -29,24 +30,38 @@ describe("market definitions", () => {
 		}
 	});
 
-	it("sells tomato seeds in bunches of ten for one coin", () => {
-		const seeds = MARKET_CATEGORIES.seeds;
-		expect(seeds.items).toEqual(["tomato-seed"]);
+	it("sells one seed per standard crop, priced from the crop registry", () => {
+		expect(MARKET_CATEGORIES.seeds.items).toEqual([
+			"wheat-seed",
+			"lettuce-seed",
+			"tomato-seed",
+		]);
 
-		const item = MARKET_ITEMS["tomato-seed"];
-		expect(item.kind).toBe("buy");
-		expect(item.price).toBe(1);
-		expect(item.quantity).toBe(10);
+		const wheat = MARKET_ITEMS["wheat-seed"];
+		expect(wheat.kind).toBe("buy");
+		expect(wheat.price).toBe(CROPS.wheat.seedCost);
+		expect(wheat.quantity).toBe(1);
+
+		const tomato = MARKET_ITEMS["tomato-seed"];
+		expect(tomato.price).toBe(CROPS.tomato.seedCost);
 	});
 
-	it("buys tomatoes individually for one coin", () => {
-		const sell = MARKET_CATEGORIES.sell;
-		expect(sell.items).toEqual(["tomato"]);
+	it("sells each produce item at its crop's value", () => {
+		expect(MARKET_CATEGORIES.sell.items).toEqual([
+			"wheat",
+			"lettuce",
+			"tomato",
+			"midas_wheat",
+			"frost_lettuce",
+			"sunburst_tomato",
+		]);
 
-		const item = MARKET_ITEMS.tomato;
-		expect(item.kind).toBe("sell");
-		expect(item.price).toBe(1);
-		expect(item.quantity).toBe(1);
+		const tomato = MARKET_ITEMS.tomato;
+		expect(tomato.kind).toBe("sell");
+		expect(tomato.price).toBe(CROPS.tomato.sellValue);
+		expect(tomato.quantity).toBe(1);
+
+		expect(MARKET_ITEMS.midas_wheat.price).toBe(CROPS.midas_wheat.sellValue);
 	});
 
 	it("clamps sell quantities into the 1..max range", () => {

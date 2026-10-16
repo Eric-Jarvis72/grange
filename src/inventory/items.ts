@@ -1,3 +1,4 @@
+import type { CropId } from "../../shared/crops";
 import type { FarmToolId } from "../../shared/farm";
 
 export type ItemId =
@@ -5,7 +6,17 @@ export type ItemId =
 	| "watering-can"
 	| "scythe"
 	| "seed-bag"
-	| "tomato";
+	| "tomato"
+	| "wheat"
+	| "lettuce"
+	| "midas_wheat"
+	| "frost_lettuce"
+	| "sunburst_tomato"
+	| "wheat-seed"
+	| "lettuce-seed"
+	| "midas-wheat-seed"
+	| "frost-lettuce-seed"
+	| "sunburst-tomato-seed";
 
 export type ItemKind = "tool" | "seed" | "crop";
 
@@ -41,24 +52,104 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 		name: "Scythe",
 		kind: "tool",
 		maxStack: 1,
-		icon: "/assets/farm/objects/scythe.svg",
-		description: "Harvest ready crops.",
+		icon: "/assets/tools/scythe_basic.webp",
+		description: "Harvest wheat and other sturdy crops.",
 	},
 	"seed-bag": {
 		id: "seed-bag",
 		name: "Tomato Seeds",
 		kind: "seed",
 		maxStack: 99,
-		icon: "/assets/farm/objects/seed-bag.webp",
-		description: "Plant in tilled soil.",
+		icon: "/assets/crops/tomato_0_seed.webp",
+		description: "Plant tomato in tilled soil.",
 	},
 	tomato: {
 		id: "tomato",
 		name: "Tomato",
 		kind: "crop",
 		maxStack: 99,
-		icon: "/assets/farm/plants/tomato-plant.webp",
+		icon: "/assets/crops/tomato_harvested.webp",
 		description: "Harvested crop. Sells for Grangecoin.",
+	},
+	wheat: {
+		id: "wheat",
+		name: "Wheat",
+		kind: "crop",
+		maxStack: 99,
+		icon: "/assets/crops/wheat_harvested.webp",
+		description: "Harvested crop. Sells for Grangecoin.",
+	},
+	lettuce: {
+		id: "lettuce",
+		name: "Lettuce",
+		kind: "crop",
+		maxStack: 99,
+		icon: "/assets/crops/lettuce_harvested.webp",
+		description: "Harvested crop. Sells for Grangecoin.",
+	},
+	midas_wheat: {
+		id: "midas_wheat",
+		name: "Midas Wheat",
+		kind: "crop",
+		maxStack: 99,
+		icon: "/assets/crops/midas_wheat_harvested.webp",
+		description: "A rare golden harvest. Sells for a premium.",
+	},
+	frost_lettuce: {
+		id: "frost_lettuce",
+		name: "Frost-Crisp Lettuce",
+		kind: "crop",
+		maxStack: 99,
+		icon: "/assets/crops/frost_lettuce_harvested.webp",
+		description: "A rare crisp harvest. Sells for a premium.",
+	},
+	sunburst_tomato: {
+		id: "sunburst_tomato",
+		name: "Sun-Burst Tomato",
+		kind: "crop",
+		maxStack: 99,
+		icon: "/assets/crops/sunburst_tomato_harvested.webp",
+		description: "A rare sun-ripened harvest. Sells for a premium.",
+	},
+	"wheat-seed": {
+		id: "wheat-seed",
+		name: "Wheat Seeds",
+		kind: "seed",
+		maxStack: 99,
+		icon: "/assets/crops/wheat_0_seed.webp",
+		description: "Plant wheat in tilled soil. Needs a scythe.",
+	},
+	"lettuce-seed": {
+		id: "lettuce-seed",
+		name: "Lettuce Seeds",
+		kind: "seed",
+		maxStack: 99,
+		icon: "/assets/crops/lettuce_0_seed.webp",
+		description: "Plant lettuce in tilled soil.",
+	},
+	"midas-wheat-seed": {
+		id: "midas-wheat-seed",
+		name: "Midas Wheat Seed",
+		kind: "seed",
+		maxStack: 99,
+		icon: "/assets/crops/midas_wheat_0_seed.webp",
+		description: "A rare golden wheat. Needs a scythe.",
+	},
+	"frost-lettuce-seed": {
+		id: "frost-lettuce-seed",
+		name: "Frost-Crisp Lettuce Seed",
+		kind: "seed",
+		maxStack: 99,
+		icon: "/assets/crops/frost_lettuce_0_seed.webp",
+		description: "A rare lettuce that waters its neighbours.",
+	},
+	"sunburst-tomato-seed": {
+		id: "sunburst-tomato-seed",
+		name: "Sun-Burst Tomato Seed",
+		kind: "seed",
+		maxStack: 99,
+		icon: "/assets/crops/sunburst_tomato_0_sprout.webp",
+		description: "A rare tomato that keeps producing.",
 	},
 };
 
@@ -70,6 +161,30 @@ export function isStackable(id: ItemId): boolean {
 	return ITEMS[id].maxStack > 1;
 }
 
+/** Seed item -> crop it plants. */
+export const SEED_CROPS: Partial<Record<ItemId, CropId>> = {
+	"seed-bag": "tomato",
+	"wheat-seed": "wheat",
+	"lettuce-seed": "lettuce",
+	"midas-wheat-seed": "midas_wheat",
+	"frost-lettuce-seed": "frost_lettuce",
+	"sunburst-tomato-seed": "sunburst_tomato",
+};
+
+/** Harvested produce item id -> crop. Each crop has its own item. */
+export const CROP_ITEMS: Record<CropId, ItemId> = {
+	wheat: "wheat",
+	lettuce: "lettuce",
+	tomato: "tomato",
+	midas_wheat: "midas_wheat",
+	frost_lettuce: "frost_lettuce",
+	sunburst_tomato: "sunburst_tomato",
+};
+
+export function cropForSeedItem(itemId: ItemId | null | undefined): CropId | null {
+	return itemId ? (SEED_CROPS[itemId] ?? null) : null;
+}
+
 /**
  * Maps a held inventory item to the farm action it performs. Selecting the
  * matching hotbar slot makes the hotbar the single tool selector.
@@ -78,13 +193,11 @@ export function farmToolForItem(itemId: ItemId | null): FarmToolId | null {
 	switch (itemId) {
 		case "hoe":
 			return "hoe";
-		case "seed-bag":
-			return "seed";
 		case "watering-can":
 			return "bucket";
 		case "scythe":
 			return "scythe";
 		default:
-			return null;
+			return itemId && cropForSeedItem(itemId) ? "seed" : null;
 	}
 }

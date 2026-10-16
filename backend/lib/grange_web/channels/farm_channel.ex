@@ -35,8 +35,8 @@ defmodule GrangeWeb.FarmChannel do
   end
 
   @impl true
-  def handle_in("sellTomatoes", %{"count" => count}, socket) do
-    authorize(socket, fn owner -> sell(socket, owner, count) end)
+  def handle_in("sellProduce", %{"item" => item, "count" => count}, socket) do
+    authorize(socket, fn owner -> sell(socket, owner, item, count) end)
   end
 
   @impl true
@@ -63,8 +63,8 @@ defmodule GrangeWeb.FarmChannel do
     end
   end
 
-  defp sell(socket, owner, count) do
-    case FarmStore.sell_tomatoes(owner, count) do
+  defp sell(socket, owner, item, count) do
+    case FarmStore.sell(owner, item, count) do
       {:ok, _farm} -> {:reply, :ok, socket}
       {:error, reason} -> {:reply, {:error, %{error: reason}}, socket}
     end

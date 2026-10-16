@@ -1,40 +1,81 @@
 import * as ex from "excalibur";
-import type { FarmTileState } from "../../shared/farm";
-import { growthStage } from "./farmState";
+import { type CropId, matureStage } from "../../shared/crops";
+import { decodeCrop } from "../../shared/farm";
 import { TILE_SIZE } from "./mapData";
-import { cropImages } from "./resources";
+import { cropStageImages } from "./resources";
 
-/** Owns the crop sprites planted on tilled tiles. `growthStage()` maps tile
- * state to sprite, so future intermediate stages only touch that helper. */
+/** The subset of a server tile the crop renderer needs. */
+export interface CropTileView {
+	state: "tilled" | "planted" | "watered" | "ready";
+	crop?: string;
+	planted_at?: number | null;
+	watered_at?: number | null;
+	ready_at?: number | null;
+}
+
+/**
+ * Maps a server tile to a growth-stage index. Standard crops show 5 stages,
+ * Midas Wheat / Frost-Crisp Lettuce 4, and Sun-Burst Tomato 3; intermediate
+ * watered frames are interpolated from the tile's water/ready timestamps.
+ */
+export function serverStageIndex(tile: CropTileView, now: number): number {
+	const { cropId } = decodeCrop(tile.crop);
+	const mature = matureStage(cropId);
+	if (tile.state === "planted") return 0;
+	if (tile.state === "ready") return mature;
+	if (tile.state === "watered") {
+		const start = tile.watered_at ?? now;
+		const end = tile.ready_at ?? start;
+		const total = Math.max(1, end - start);
+		const progress = Math.min(1, Math.max(0, (now - start) / total));
+		return Math.min(mature, Math.round(progress * mature));
+	}
+	return -1;
+}
+
+interface PlantedCrop {
+	actor: ex.Actor;
+	cropId: CropId;
+	stage: number;
+}
+
+/** Owns the crop sprites planted on tilled tiles. */
 export class CropLayer {
-	private readonly crops = new Map<string, ex.Actor>();
+	private readonly crops = new Map<string, PlantedCrop>();
 
 	constructor(private readonly scene: ex.Scene) {}
 
 	sync(
 		column: number,
 		row: number,
-		state: FarmTileState | undefined,
+		tile: CropTileView | undefined,
+		now: number = Date.now(),
 	): void {
 		const key = `${column},${row}`;
-		const stage = growthStage(state);
-		const actor = this.crops.get(key);
-		if (stage === "none") {
-			actor?.kill();
+		const existing = this.crops.get(key);
+		if (!tile || tile.state === "tilled") {
+			existing?.actor.kill();
 			this.crops.delete(key);
 			return;
 		}
-		const source =
-			stage === "mature" ? cropImages["tomato-plant"] : cropImages.sprout;
+
+		const { cropId } = decodeCrop(tile.crop);
+		const stage = serverStageIndex(tile, now);
+		if (existing && existing.cropId === cropId && existing.stage === stage) return;
+
+		const source = cropStageImages[cropId][stage];
 		const sprite = source.toSprite();
-		const targetHeight = stage === "mature" ? 52 : 30;
+		const targetHeight = stage === matureStage(cropId) ? 52 : 30;
 		const scale = targetHeight / source.height;
 		sprite.scale = ex.vec(scale, scale);
-		if (actor?.isActive) {
-			actor.graphics.use(sprite);
+
+		if (existing) {
+			existing.actor.graphics.use(sprite);
+			existing.cropId = cropId;
+			existing.stage = stage;
 			return;
 		}
-		this.crops.delete(key);
+
 		const crop = new ex.Actor({
 			pos: ex.vec(
 				column * TILE_SIZE + TILE_SIZE / 2,
@@ -45,7 +86,7 @@ export class CropLayer {
 		});
 		crop.graphics.use(sprite);
 		this.scene.add(crop);
-		this.crops.set(key, crop);
+		this.crops.set(key, { actor: crop, cropId, stage });
 	}
 
 	private static readonly baseLift = 14;

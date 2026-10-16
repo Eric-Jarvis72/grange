@@ -1,11 +1,22 @@
+import { CROPS, type CropId } from "../../shared/crops";
+
 /** The two enterable market stalls placed in the marketplace. */
 export type MarketId = "seed" | "produce";
 
 /** A buy/sell tab shown inside a market window. */
 export type MarketCategoryId = "seeds" | "tools" | "train" | "sell";
 
-/** A good that can be traded at a market. */
-export type MarketItemId = "tomato-seed" | "tomato";
+/** A good that can be traded at a market. Produce ids double as crop ids. */
+export type MarketItemId =
+	| "tomato-seed"
+	| "wheat-seed"
+	| "lettuce-seed"
+	| "tomato"
+	| "wheat"
+	| "lettuce"
+	| "midas_wheat"
+	| "frost_lettuce"
+	| "sunburst_tomato";
 
 export interface MarketItem {
 	id: MarketItemId;
@@ -13,32 +24,49 @@ export interface MarketItem {
 	emoji: string;
 	/** "buy" spends grangecoin, "sell" earns it. */
 	kind: "buy" | "sell";
-	/** Grangecoin spent or earned per transaction. */
+	/** Grangecoin spent or earned per unit. */
 	price: number;
 	/** Units granted or taken per transaction. */
 	quantity: number;
 	blurb: string;
 }
 
-export const MARKET_ITEMS: Record<MarketItemId, MarketItem> = {
-	"tomato-seed": {
-		id: "tomato-seed",
-		name: "Tomato Seeds",
-		emoji: "🌱",
+function seedItem(id: MarketItemId, crop: CropId, emoji: string): MarketItem {
+	const { name, seedCost } = CROPS[crop];
+	return {
+		id,
+		name: `${name} Seeds`,
+		emoji,
 		kind: "buy",
-		price: 1,
-		quantity: 10,
-		blurb: "10 seeds for $1",
-	},
-	tomato: {
-		id: "tomato",
-		name: "Tomatoes",
-		emoji: "🍅",
-		kind: "sell",
-		price: 1,
+		price: seedCost,
 		quantity: 1,
-		blurb: "$1 each",
-	},
+		blurb: `$${seedCost} each`,
+	};
+}
+
+function produceItem(id: MarketItemId, crop: CropId, emoji: string): MarketItem {
+	const { name, sellValue } = CROPS[crop];
+	return {
+		id,
+		name,
+		emoji,
+		kind: "sell",
+		price: sellValue,
+		quantity: 1,
+		blurb: `$${sellValue} each`,
+	};
+}
+
+export const MARKET_ITEMS: Record<MarketItemId, MarketItem> = {
+	"tomato-seed": seedItem("tomato-seed", "tomato", "🌱"),
+	"wheat-seed": seedItem("wheat-seed", "wheat", "🌱"),
+	"lettuce-seed": seedItem("lettuce-seed", "lettuce", "🌱"),
+	tomato: produceItem("tomato", "tomato", "🍅"),
+	wheat: produceItem("wheat", "wheat", "🌾"),
+	lettuce: produceItem("lettuce", "lettuce", "🥬"),
+	midas_wheat: produceItem("midas_wheat", "midas_wheat", "🌟"),
+	frost_lettuce: produceItem("frost_lettuce", "frost_lettuce", "❄️"),
+	sunburst_tomato: produceItem("sunburst_tomato", "sunburst_tomato", "☀️"),
 };
 
 export interface MarketCategory {
@@ -56,7 +84,7 @@ export const MARKET_CATEGORIES: Record<MarketCategoryId, MarketCategory> = {
 		id: "seeds",
 		label: "Seeds",
 		description: "Buy seeds to plant on your farm.",
-		items: ["tomato-seed"],
+		items: ["wheat-seed", "lettuce-seed", "tomato-seed"],
 		slots: 8,
 	},
 	tools: {
@@ -76,8 +104,15 @@ export const MARKET_CATEGORIES: Record<MarketCategoryId, MarketCategory> = {
 	sell: {
 		id: "sell",
 		label: "Sell",
-		description: "Sell crops and goods from your barn.",
-		items: ["tomato"],
+		description: "Sell crops from your barn.",
+		items: [
+			"wheat",
+			"lettuce",
+			"tomato",
+			"midas_wheat",
+			"frost_lettuce",
+			"sunburst_tomato",
+		],
 		slots: 12,
 	},
 };

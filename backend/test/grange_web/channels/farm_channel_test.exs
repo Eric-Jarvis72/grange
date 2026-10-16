@@ -60,7 +60,7 @@ defmodule GrangeWeb.FarmChannelTest do
     assert reply.error == "not your farm"
   end
 
-  test "the owner can sell tomatoes and the change is broadcast" do
+  test "the owner can sell produce and the change is broadcast" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 1, "y" => 1})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 1, "y" => 1})
@@ -73,19 +73,18 @@ defmodule GrangeWeb.FarmChannelTest do
     {:ok, _reply, socket} =
       signed_socket("Alice") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
 
-    ref = push(socket, "sellTomatoes", %{"count" => 1})
+    ref = push(socket, "sellProduce", %{"item" => "tomato", "count" => 1})
     assert_reply(ref, :ok)
-    remaining = Farm.harvest_yield() - 1
-    assert_broadcast("farmUpdate", %{farm: %{tomatoes: ^remaining}})
+    assert_broadcast("farmUpdate", %{farm: %{tomatoes: 0}})
   end
 
-  test "a visitor cannot sell tomatoes" do
+  test "a visitor cannot sell produce" do
     FarmStore.ensure("Alice")
 
     {:ok, _reply, socket} =
       signed_socket("Bob") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
 
-    ref = push(socket, "sellTomatoes", %{"count" => 1})
+    ref = push(socket, "sellProduce", %{"item" => "tomato", "count" => 1})
     assert_reply(ref, :error, reply)
     assert reply.error == "not your farm"
   end

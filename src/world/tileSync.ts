@@ -1,6 +1,5 @@
 import type * as ex from "excalibur";
-import type { FarmTileState } from "../../shared/farm";
-import type { CropLayer } from "./cropLayer";
+import type { CropLayer, CropTileView } from "./cropLayer";
 import type { MapProp } from "./mapData";
 import { terrainAt } from "./mapData";
 import { terrainFrames } from "./resources";
@@ -31,21 +30,22 @@ export function refreshTile(
 	crops: CropLayer,
 	column: number,
 	row: number,
-	state: FarmTileState | undefined,
+	tile: CropTileView | undefined,
 ): void {
-	const tile = terrain.getTile(column, row);
-	if (!tile) return;
-	tile.clearGraphics();
+	const mapTile = terrain.getTile(column, row);
+	if (!mapTile) return;
+	const state = tile?.state;
+	mapTile.clearGraphics();
 	if (!state) {
 		const frame = terrainFrames[terrainAt(column, row)];
-		tile.addGraphic(sheet.getSprite(frame.column, frame.row));
+		mapTile.addGraphic(sheet.getSprite(frame.column, frame.row));
 	} else {
 		const soil =
 			state === "planted" || state === "tilled"
 				? "tilled-dry"
 				: "tilled-watered";
 		const frame = terrainFrames[soil];
-		tile.addGraphic(sheet.getSprite(frame.column, frame.row));
+		mapTile.addGraphic(sheet.getSprite(frame.column, frame.row));
 	}
-	crops.sync(column, row, state);
+	crops.sync(column, row, tile);
 }

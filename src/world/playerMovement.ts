@@ -9,8 +9,15 @@ export function updateFarmPlayer(
 	player: ex.Actor,
 	direction: InputVector,
 	delta: number,
+	speedMultiplier = 1,
 ): void {
-	updateWalkingPlayer(player, direction, 160, delta, farmWalkObstacles);
+	updateWalkingPlayer(
+		player,
+		direction,
+		160 * speedMultiplier,
+		delta,
+		farmWalkObstacles,
+	);
 }
 
 export function updateWalkingPlayer(

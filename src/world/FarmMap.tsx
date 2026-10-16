@@ -1,10 +1,11 @@
 import * as ex from "excalibur";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { CropId } from "../../shared/crops";
 import type { FarmToolId } from "../../shared/farm";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
-import { farmToolForItem } from "../inventory/items";
+import { CROP_ITEMS, farmToolForItem } from "../inventory/items";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { PauseMenu } from "../pause/PauseMenu";
 import { usePauseStore } from "../pause/pauseStore";
@@ -16,6 +17,7 @@ import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { BlackjackOverlay } from "./BlackjackOverlay";
 import { CasinoScene } from "./CasinoScene";
 import { casinoResources } from "./casinoResources";
+import { ComboCounter } from "./ComboCounter";
 import { FarmMapScene } from "./FarmMapScene";
 import type { FarmHudSnapshot } from "./farmHud";
 import "./farmMap.css";
@@ -69,7 +71,7 @@ export default function FarmMap() {
 	const pushNotice = useNotificationStore((s) => s.push);
 	const paused = usePauseStore((s) => s.paused);
 	const setPaused = usePauseStore((s) => s.setPaused);
-	const tomatoBaseline = useRef<number | null>(null);
+	const barnBaseline = useRef<Record<string, number> | null>(null);
 	const { owner } = useParams<{ owner?: string }>();
 	const navigate = useNavigate();
 	const [hud, setHud] = useState<FarmHudSnapshot>({
@@ -90,8 +92,8 @@ export default function FarmMap() {
 	} = useFarmMarket(target, isOwner);
 
 	useEffect(() => {
-		// Re-baseline harvest tomatoes whenever the target farm changes.
-		tomatoBaseline.current = null;
+		// Re-baseline barn produce whenever the target farm changes.
+		barnBaseline.current = null;
 		if (!target) return;
 
 		emitVisitFarm(target, (res) => {
@@ -108,19 +110,28 @@ export default function FarmMap() {
 		if (next) setTool(next);
 	}, [hotbar, selectedHotbar, setTool]);
 
-	// Harvested tomatoes become physical inventory items. The server keeps its
-	// own barn/lobby total; we mirror the positive delta for the owner into the
-	// inventory. The first snapshot of a farm only sets the baseline, so a
-	// reload doesn't re-bank the persisted server count.
-	const tomatoes = farm?.tomatoes ?? null;
+	// Tell the scene an active slot changed so the combo tracker can grant its
+	// one-time chaining grace on the next different action.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: fires on slot change by design
 	useEffect(() => {
-		if (tomatoes === null || !isOwner) return;
-		const previous = tomatoBaseline.current;
-		tomatoBaseline.current = tomatoes;
+		sceneRef.current?.noteHotbarSwap();
+	}, [selectedHotbar]);
+
+	// Harvested produce becomes physical inventory items. The server keeps the
+	// barn counts per crop; we mirror the positive delta for the owner into the
+	// matching inventory item. The first snapshot of a farm only sets the
+	// baseline, so a reload doesn't re-bank the persisted barn.
+	const barn = farm?.barn ?? null;
+	useEffect(() => {
+		if (barn === null || !isOwner) return;
+		const previous = barnBaseline.current;
+		barnBaseline.current = barn;
 		if (previous === null) return;
-		const gained = tomatoes - previous;
-		if (gained > 0) addItem("tomato", gained);
-	}, [tomatoes, isOwner, addItem]);
+		for (const [cropId, count] of Object.entries(barn)) {
+			const gained = count - (previous[cropId] ?? 0);
+			if (gained > 0) addItem(CROP_ITEMS[cropId as CropId] ?? "tomato", gained);
+		}
+	}, [barn, isOwner, addItem]);
 
 	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
@@ -306,6 +317,7 @@ export default function FarmMap() {
 				</div>
 			)}
 			<Hud tiles={farm?.tiles.length ?? 0} hovered={hud.hovered} />
+			<ComboCounter />
 			<InventoryPanel />
 			{paused && <PauseMenu />}
 			{blackjackOpen && <BlackjackOverlay onClose={closeCasinoOverlay} />}

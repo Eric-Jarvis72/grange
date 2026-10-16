@@ -61,11 +61,19 @@ defmodule Grange.Farm do
 
   @doc "Waters a planted tile, scheduling when it becomes ready."
   @spec water(tile(), integer()) :: {:ok, tile()} | {:error, String.t()}
-  def water(%{state: :planted} = tile, now) do
-    {:ok, %{tile | state: :watered, watered_at: now, ready_at: now + @grow_ms}}
+  def water(%{state: :planted} = tile, now), do: water(tile, now, @grow_ms)
+  def water(_tile, _now), do: {:error, "tile is not planted"}
+
+  @doc """
+  Waters a planted tile with an explicit grow time, so synergy (wheat packs,
+  tomato spacing) can shorten or lengthen the ripening window.
+  """
+  @spec water(tile(), integer(), number()) :: {:ok, tile()} | {:error, String.t()}
+  def water(%{state: :planted} = tile, now, grow_ms) do
+    {:ok, %{tile | state: :watered, watered_at: now, ready_at: now + round(grow_ms)}}
   end
 
-  def water(_tile, _now), do: {:error, "tile is not planted"}
+  def water(_tile, _now, _grow_ms), do: {:error, "tile is not planted"}
 
   @doc "Harvests a ready tile back to tilled ground."
   @spec harvest(tile()) :: {:ok, tile()} | {:error, String.t()}

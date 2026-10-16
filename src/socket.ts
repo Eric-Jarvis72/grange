@@ -148,9 +148,10 @@ export function emitFarmAction(
 		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
 }
 
-/** Sells tomatoes from the visited farm's barn back to the market. */
-export function emitSellTomatoes(
+/** Sells a produce item from the visited farm's barn back to the market. */
+export function emitSellProduce(
 	owner: string,
+	item: string,
 	count: number,
 	cb?: (res: Ack) => void,
 ): void {
@@ -161,7 +162,7 @@ export function emitSellTomatoes(
 	}
 
 	channel
-		.push("sellTomatoes", { count })
+		.push("sellProduce", { item, count })
 		.receive("ok", () => cb?.({ ok: true }))
 		.receive("error", (payload: unknown) =>
 			cb?.({ ok: false, error: reasonOf(payload) ?? "Could not sell" }),

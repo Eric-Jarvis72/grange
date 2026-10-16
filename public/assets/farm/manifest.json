@@ -248,16 +248,6 @@
       ]
     },
     {
-      "name": "leafy-greens",
-      "file": "plants/leafy-greens.webp",
-      "width": 240,
-      "height": 199,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
       "name": "carrots",
       "file": "plants/carrots.webp",
       "width": 270,
@@ -292,26 +282,6 @@
       "file": "plants/tomato-plant.webp",
       "width": 252,
       "height": 270,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "name": "wheat",
-      "file": "plants/wheat.webp",
-      "width": 273,
-      "height": 267,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "name": "pumpkin",
-      "file": "plants/pumpkin.webp",
-      "width": 292,
-      "height": 258,
       "anchor": [
         0.5,
         1.0
@@ -602,6 +572,71 @@
       ]
     }
   ],
+  "crops": {
+    "directory": "../crops",
+    "note": "Crop growth stages and harvested icons live in public/assets/crops. Stage files are <crop>_<index>_<label>.webp and harvested icons are <crop>_harvested.webp.",
+    "tomato": {
+      "stages": [
+        "tomato_0_seed.webp",
+        "tomato_1_sprout.webp",
+        "tomato_2_medium.webp",
+        "tomato_3_flowering.webp",
+        "tomato_4_mature.webp"
+      ],
+      "harvested": "tomato_harvested.webp"
+    },
+    "sunburst_tomato": {
+      "stages": [
+        "sunburst_tomato_0_sprout.webp",
+        "sunburst_tomato_1_flowering.webp",
+        "sunburst_tomato_2_mature.webp"
+      ],
+      "harvested": "sunburst_tomato_harvested.webp"
+    },
+    "wheat": {
+      "stages": [
+        "wheat_0_seed.webp",
+        "wheat_1_sprout.webp",
+        "wheat_2_young.webp",
+        "wheat_3_golden.webp",
+        "wheat_4_mature.webp"
+      ],
+      "harvested": "wheat_harvested.webp"
+    },
+    "midas_wheat": {
+      "stages": [
+        "midas_wheat_0_seed.webp",
+        "midas_wheat_1_sprout.webp",
+        "midas_wheat_2_radiant.webp",
+        "midas_wheat_3_mature.webp"
+      ],
+      "harvested": "midas_wheat_harvested.webp"
+    },
+    "lettuce": {
+      "stages": [
+        "lettuce_0_seed.webp",
+        "lettuce_1_sprout.webp",
+        "lettuce_2_leaf.webp",
+        "lettuce_3_loose.webp",
+        "lettuce_4_mature.webp"
+      ],
+      "harvested": "lettuce_harvested.webp"
+    },
+    "frost_lettuce": {
+      "stages": [
+        "frost_lettuce_0_seed.webp",
+        "frost_lettuce_1_sprout.webp",
+        "frost_lettuce_2_young.webp",
+        "frost_lettuce_3_mature.webp"
+      ],
+      "harvested": "frost_lettuce_harvested.webp"
+    }
+  },
+  "tools": {
+    "directory": "../tools",
+    "scythes": ["scythe_basic.webp", "scythe_iron.webp", "scythe_runed.webp"],
+    "sweepFx": ["sweep_fx_0.webp", "sweep_fx_1.webp", "sweep_fx_2.webp"]
+  },
   "sources": [
     "ChatGPT Image Sep 28, 2026, 10_29_54 PM-1.png",
     "ChatGPT Image Sep 28, 2026, 10_29_55 PM-2.png",
