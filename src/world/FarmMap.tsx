@@ -1,20 +1,20 @@
 import * as ex from "excalibur";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { CropId } from "../../shared/crops";
 import type { FarmToolId } from "../../shared/farm";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
-import { CROP_ITEMS, farmToolForItem } from "../inventory/items";
+import { farmToolForItem } from "../inventory/items";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { PauseMenu } from "../pause/PauseMenu";
 import { usePauseStore } from "../pause/pauseStore";
 import { emitLeaveFarm, emitVisitFarm } from "../socket";
 import { useGameStore } from "../store";
 import "../inventory/inventory.css";
-import { useInventoryStore } from "../inventory/inventoryStore";
+import { countItem, useInventoryStore } from "../inventory/inventoryStore";
 import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { BlackjackOverlay } from "./BlackjackOverlay";
+import { reconcileBarn } from "./barnSync";
 import { CasinoScene } from "./CasinoScene";
 import { casinoResources } from "./casinoResources";
 import { ComboCounter } from "./ComboCounter";
@@ -67,11 +67,11 @@ export default function FarmMap() {
 	const selectedHotbar = useInventoryStore((s) => s.selectedHotbar);
 	const hotbar = useInventoryStore((s) => s.hotbar);
 	const addItem = useInventoryStore((s) => s.addItem);
+	const removeItem = useInventoryStore((s) => s.removeItem);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
 	const pushNotice = useNotificationStore((s) => s.push);
 	const paused = usePauseStore((s) => s.paused);
 	const setPaused = usePauseStore((s) => s.setPaused);
-	const barnBaseline = useRef<Record<string, number> | null>(null);
 	const { owner } = useParams<{ owner?: string }>();
 	const navigate = useNavigate();
 	const [hud, setHud] = useState<FarmHudSnapshot>({
@@ -92,8 +92,6 @@ export default function FarmMap() {
 	} = useFarmMarket(target, isOwner);
 
 	useEffect(() => {
-		// Re-baseline barn produce whenever the target farm changes.
-		barnBaseline.current = null;
 		if (!target) return;
 
 		emitVisitFarm(target, (res) => {
@@ -117,21 +115,18 @@ export default function FarmMap() {
 		sceneRef.current?.noteHotbarSwap();
 	}, [selectedHotbar]);
 
-	// Harvested produce becomes physical inventory items. The server keeps the
-	// barn counts per crop; we mirror the positive delta for the owner into the
-	// matching inventory item. The first snapshot of a farm only sets the
-	// baseline, so a reload doesn't re-bank the persisted barn.
+	// The server barn is the source of truth for harvested produce. Reconcile
+	// the local inventory to match it on every farm snapshot, so harvesting
+	// adds items and selling removes them again (and reloads stay consistent).
 	const barn = farm?.barn ?? null;
 	useEffect(() => {
 		if (barn === null || !isOwner) return;
-		const previous = barnBaseline.current;
-		barnBaseline.current = barn;
-		if (previous === null) return;
-		for (const [cropId, count] of Object.entries(barn)) {
-			const gained = count - (previous[cropId] ?? 0);
-			if (gained > 0) addItem(CROP_ITEMS[cropId as CropId] ?? "tomato", gained);
-		}
-	}, [barn, isOwner, addItem]);
+		reconcileBarn(barn, {
+			addItem,
+			removeItem,
+			countItem: (itemId) => countItem(useInventoryStore.getState(), itemId),
+		});
+	}, [barn, isOwner, addItem, removeItem]);
 
 	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);

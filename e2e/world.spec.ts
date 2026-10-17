@@ -230,6 +230,11 @@ test("selling a harvested tomato credits the wallet", async ({
 	await page.keyboard.press("4");
 	await page.keyboard.press("Space");
 	await expect(page.getByTestId("farm-tomatoes")).toContainText("1");
+	// The harvest lands in the first free hotbar slot.
+	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
+		"data-count",
+		"1",
+	);
 
 	// Travel to the marketplace and open the produce market.
 	await page.keyboard.down("d");
@@ -257,6 +262,12 @@ test("selling a harvested tomato credits the wallet", async ({
 	await expect(page.getByTestId("market-owned-tomato")).toContainText("0");
 	await expect(page.getByTestId("farm-balance")).toContainText("105");
 	await expect(page.getByTestId("market-action-tomato")).toBeDisabled();
+	// Selling also clears it from the local inventory, so it can't linger.
+	await page.getByTestId("market-close").click();
+	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
+		"data-count",
+		"0",
+	);
 });
 
 test("balance belongs to the account and starts fresh for a new one", async ({
