@@ -11,10 +11,10 @@ import { usePauseStore } from "../pause/pauseStore";
 import { emitLeaveFarm, emitVisitFarm } from "../socket";
 import { useGameStore } from "../store";
 import "../inventory/inventory.css";
-import { countItem, useInventoryStore } from "../inventory/inventoryStore";
+import { useInventoryStore } from "../inventory/inventoryStore";
 import { useInventoryKeys } from "../inventory/useInventoryKeys";
+import { MOVABLE_PROP_ASSETS } from "./mapData";
 import { BlackjackOverlay } from "./BlackjackOverlay";
-import { reconcileBarn } from "./barnSync";
 import { CasinoScene } from "./CasinoScene";
 import { casinoResources } from "./casinoResources";
 import { ComboCounter } from "./ComboCounter";
@@ -29,6 +29,7 @@ import { marketplaceResources } from "./marketplaceResources";
 import { PokerOverlay } from "./PokerOverlay";
 import { RouletteOverlay } from "./RouletteOverlay";
 import { resources } from "./resources";
+import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
 import type { WorldArea } from "./WalkingScene";
 
@@ -66,8 +67,7 @@ export default function FarmMap() {
 	const setTool = useGameStore((s) => s.setTool);
 	const selectedHotbar = useInventoryStore((s) => s.selectedHotbar);
 	const hotbar = useInventoryStore((s) => s.hotbar);
-	const addItem = useInventoryStore((s) => s.addItem);
-	const removeItem = useInventoryStore((s) => s.removeItem);
+	const setItemCount = useInventoryStore((s) => s.setItemCount);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
 	const pushNotice = useNotificationStore((s) => s.push);
 	const paused = usePauseStore((s) => s.paused);
@@ -115,18 +115,28 @@ export default function FarmMap() {
 		sceneRef.current?.noteHotbarSwap();
 	}, [selectedHotbar]);
 
-	// The server barn is the source of truth for harvested produce. Reconcile
-	// the local inventory to match it on every farm snapshot, so harvesting
-	// adds items and selling removes them again (and reloads stay consistent).
-	const barn = farm?.barn ?? null;
+	const heldItem = hotbar[selectedHotbar]?.itemId;
 	useEffect(() => {
-		if (barn === null || !isOwner) return;
-		reconcileBarn(barn, {
-			addItem,
-			removeItem,
-			countItem: (itemId) => countItem(useInventoryStore.getState(), itemId),
-		});
-	}, [barn, isOwner, addItem, removeItem]);
+		if (heldItem === "fence") pushNotice("Fence: click clear grass to place a post.", "system");
+		if (heldItem === "shovel") pushNotice("Shovel: click a fence or farm object to dig it up.", "system");
+		if (heldItem && MOVABLE_PROP_ASSETS.some((asset) => asset === heldItem))
+			pushNotice(`Click clear ground to place ${heldItem}.`, "system");
+	}, [heldItem, pushNotice]);
+
+	const fenceCount = farm?.fence_count;
+	useEffect(() => {
+		if (fenceCount !== undefined && isOwner) setItemCount("fence", fenceCount);
+	}, [fenceCount, isOwner, setItemCount]);
+
+	const propInventory = farm?.prop_inventory;
+	useEffect(() => {
+		if (!propInventory || !isOwner) return;
+		for (const asset of MOVABLE_PROP_ASSETS)
+			setItemCount(asset, propInventory[asset] ?? 0);
+	}, [propInventory, isOwner, setItemCount]);
+
+	// Keep the local inventory's produce in sync with the authoritative barn.
+	useBarnReconcile(farm?.barn ?? null, isOwner);
 
 	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);

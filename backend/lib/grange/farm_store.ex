@@ -1,19 +1,33 @@
 defmodule Grange.FarmStore do
   @moduledoc """
-  Owns every player's field and barn inventory, plus the lobby listings.
+  Owns every player's field, barn inventory, fences, and movable props, plus
+  the lobby listings.
 
   State is persisted in the database, so farms survive restarts. Each
   successful change broadcasts the affected farm and the lobby summaries over
   PubSub. Tile timing uses wall-clock milliseconds (`System.system_time/1`) so
   crops keep ripening across restarts.
 
-  Produce is tracked per crop in `barn_items`; the legacy `farms.tomatoes`
-  column is no longer written and only kept for backwards compatibility.
+  Produce lives in the barn (`barn_items`); the legacy `farms.tomatoes` column
+  is no longer written and is only kept for backwards compatibility.
   """
 
   import Ecto.Query
 
-  alias Grange.{BarnItem, Crops, Farm, FarmAction, FarmRecord, Repo, Tile}
+  alias Grange.{
+    Barn,
+    BarnItem,
+    Crops,
+    Farm,
+    FarmAction,
+    FarmFence,
+    FarmFences,
+    FarmProp,
+    FarmProps,
+    FarmRecord,
+    Repo,
+    Tile
+  }
 
   @lobby_topic "lobby"
   @orthogonal [{0, -1}, {0, 1}, {1, 0}, {-1, 0}]
@@ -42,9 +56,19 @@ defmodule Grange.FarmStore do
       nil ->
         nil
 
-      _farm ->
-        barn = barn(owner)
-        %{owner: owner, tiles: tiles(owner), barn: barn, tomatoes: Map.get(barn, "tomato", 0)}
+      farm ->
+        barn = Barn.map(owner)
+
+        %{
+          owner: owner,
+          tiles: tiles(owner),
+          barn: barn,
+          tomatoes: Map.get(barn, "tomato", 0),
+          fences: FarmFences.list(owner),
+          fence_count: farm.fence_count,
+          prop_overrides: FarmProps.overrides(owner),
+          prop_inventory: FarmProps.inventory(owner)
+        }
     end
   end
 
@@ -62,16 +86,27 @@ defmodule Grange.FarmStore do
     end
   end
 
-  @spec sell(String.t(), String.t(), integer()) :: {:ok, map()} | {:error, String.t()}
-  def sell(owner, item, count) when is_binary(item) and is_integer(count) and count > 0 do
-    case Repo.get_by(BarnItem, owner: owner, item: item) do
-      %BarnItem{count: held} = row when held >= count ->
-        row |> BarnItem.changeset(%{count: held - count}) |> Repo.update!()
+  @spec prop_action(String.t(), map()) :: {:ok, map()} | {:error, String.t()}
+  def prop_action(owner, action) do
+    case FarmProps.action(owner, action) do
+      {:ok, :ok} ->
         broadcast_change(owner)
         {:ok, view(owner)}
 
-      _insufficient ->
-        {:error, "not enough #{item}"}
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @spec sell(String.t(), String.t(), integer()) :: {:ok, map()} | {:error, String.t()}
+  def sell(owner, item, count) when is_binary(item) and is_integer(count) and count > 0 do
+    case Barn.sell(owner, item, count) do
+      :ok ->
+        broadcast_change(owner)
+        {:ok, view(owner)}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -97,12 +132,19 @@ defmodule Grange.FarmStore do
   def reset do
     Repo.delete_all(Tile)
     Repo.delete_all(BarnItem)
+    Repo.delete_all(FarmFence)
+    Repo.delete_all(FarmProp)
     Repo.delete_all(FarmRecord)
     :ok
   end
 
   defp run(owner, kind, x, y, opts) do
-    if Farm.in_bounds?(x, y) do
+    bounds? =
+      if kind in [:place_fence, :remove_fence],
+        do: x in 0..17 and y in 0..9,
+        else: Farm.in_bounds?(x, y)
+
+    if bounds? do
       apply_action(owner, kind, x, y, opts)
     else
       {:error, "out of bounds"}
@@ -141,6 +183,10 @@ defmodule Grange.FarmStore do
     end
   end
 
+  defp mutate(owner, :place_fence, x, y, _opts), do: FarmFences.place(owner, x, y)
+
+  defp mutate(owner, :remove_fence, x, y, _opts), do: FarmFences.remove(owner, x, y)
+
   defp mutate(owner, kind, x, y, opts) do
     case tile_at(owner, x, y) do
       nil -> {:error, "no tilled tile here"}
@@ -170,7 +216,7 @@ defmodule Grange.FarmStore do
     {crop_id, remaining} = Crops.parse_crop(tile.crop)
 
     if Crops.can_harvest?(crop_id, opts[:tool]) do
-      add_produce(owner, crop_id, 1)
+      Barn.add(owner, crop_id, 1)
       families = neighbor_families(owner, tile.x, tile.y)
       drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
       regrow_or_clear(owner, tile, crop_id, remaining)
@@ -219,26 +265,6 @@ defmodule Grange.FarmStore do
     :ok
   end
 
-  defp add_produce(owner, item, count) do
-    case Repo.get_by(BarnItem, owner: owner, item: item) do
-      nil ->
-        %BarnItem{}
-        |> BarnItem.changeset(%{owner: owner, item: item, count: count})
-        |> Repo.insert!()
-
-      row ->
-        row |> BarnItem.changeset(%{count: row.count + count}) |> Repo.update!()
-    end
-
-    :ok
-  end
-
-  defp barn(owner) do
-    from(b in BarnItem, where: b.owner == ^owner)
-    |> Repo.all()
-    |> Map.new(&{&1.item, &1.count})
-  end
-
   defp neighbor_families(owner, x, y) do
     for {dx, dy} <- @orthogonal,
         tile = tile_at(owner, x + dx, y + dy),
@@ -249,7 +275,14 @@ defmodule Grange.FarmStore do
     end
   end
 
-  @kinds %{"till" => :till, "plant" => :plant, "water" => :water, "harvest" => :harvest}
+  @kinds %{
+    "till" => :till,
+    "plant" => :plant,
+    "water" => :water,
+    "harvest" => :harvest,
+    "place_fence" => :place_fence,
+    "remove_fence" => :remove_fence
+  }
 
   defp normalize(action) when is_map(action) do
     kind = Map.get(@kinds, to_string(fetch(action, "kind")))

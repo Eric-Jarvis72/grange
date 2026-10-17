@@ -1,19 +1,16 @@
 import * as ex from "excalibur";
-import type { CropId } from "../../shared/crops";
 import { type FarmToolId, isFarmInBounds } from "../../shared/farm";
-import { emitFarmAction } from "../socket";
 import { useGameStore } from "../store";
-import {
-	countItem,
-	isInventoryBlockingInput,
-	useInventoryStore,
-} from "../inventory/inventoryStore";
-import { cropForSeedItem, type ItemId } from "../inventory/items";
-import { BlockRegistry, decorByTile } from "./blocking";
+import { isInventoryBlockingInput } from "../inventory/inventoryStore";
+import { BlockRegistry } from "./blocking";
 import { ComboController } from "./farmCombo";
 import { useComboStore } from "./comboStore";
 import { CropLayer } from "./cropLayer";
-import { type ActionPlan, maybeSpread, resolveAction } from "./farmActions";
+import { FenceLayer } from "./fenceRendering";
+import { actOnFence, selectedFarmItem } from "./fenceActions";
+import { performFarmAction } from "./farmActionRunner";
+import { handleFarmPropClick } from "./farmPropActions";
+import { FarmPropLayer } from "./farmPropLayer";
 import { FarmTravel } from "./FarmTravel";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
 import type { FarmHoveredTile, FarmHudSnapshot } from "./farmHud";
@@ -22,20 +19,19 @@ import { FarmTileSync } from "./farmSceneTiles";
 import { InputManager } from "./InputManager";
 import {
 	FARM_PLAYER_SPAWN,
-	isTillableTile,
 	MAP_COLUMNS,
 	MAP_HEIGHT,
 	MAP_ROWS,
 	MAP_WIDTH,
-	props,
 	TILE_SIZE,
 	terrainAt,
 } from "./mapData";
 import { updateFarmPlayer } from "./playerMovement";
-import { addFarmProps } from "./propLayer";
 import { terrainFrames, terrainImage } from "./resources";
 import { SweepFx } from "./sweepFx";
 import type { WorldArea } from "./WalkingScene";
+
+const FARM_TOOLS = ["hoe", "seed-bag", "watering-can", "scythe"];
 
 export class FarmMapScene extends ex.Scene {
 	onFarmUpdate: ((snapshot: FarmHudSnapshot) => void) | null = null;
@@ -49,8 +45,8 @@ export class FarmMapScene extends ex.Scene {
 	private readonly sweepFx = new SweepFx(this);
 	private readonly combo = new ComboController();
 	private readonly blocks = new BlockRegistry();
-	private readonly propActors: Array<ex.Actor | undefined> = [];
-	private readonly decor = decorByTile(props);
+	private readonly fences = new FenceLayer(this, this.blocks);
+	private readonly farmProps = new FarmPropLayer(this, this.blocks);
 
 	private painting = false;
 	private readonly strokeTiles = new Set<string>();
@@ -107,12 +103,11 @@ export class FarmMapScene extends ex.Scene {
 			terrain: this.terrain,
 			sheet: this.sheet,
 			crops: this.crops,
-			decor: this.decor,
-			propActors: this.propActors,
-			props,
 		});
 
-		addFarmProps(this, this.blocks, this.propActors);
+		// Populate saved farm props and their collision/tool footprints.
+		this.farmProps.set(useGameStore.getState().activeFarm?.prop_overrides ?? []);
+		this.fences.set(useGameStore.getState().activeFarm?.fences ?? []);
 
 		this.player = new ex.Actor({
 			pos: ex.vec(FARM_PLAYER_SPAWN.x, FARM_PLAYER_SPAWN.y),
@@ -126,8 +121,9 @@ export class FarmMapScene extends ex.Scene {
 
 		const pointers = engine.input.pointers;
 		pointers.primary.on("down", (evt) => {
-			if (this.deactivated) return;
-			this.painting = true;
+			if (this.deactivated || isInventoryBlockingInput()) return;
+			const item = selectedFarmItem();
+			this.painting = FARM_TOOLS.includes(item ?? "");
 			this.strokeTiles.clear();
 			this.applyToolAt(evt.worldPos);
 		});
@@ -164,6 +160,9 @@ export class FarmMapScene extends ex.Scene {
 	}
 
 	override onPreUpdate(engine: ex.Engine, delta: number): void {
+		this.farmProps.set(useGameStore.getState().activeFarm?.prop_overrides ?? []);
+		this.fences.set(useGameStore.getState().activeFarm?.fences ?? []);
+
 		if (isInventoryBlockingInput()) {
 			this.player.vel = ex.vec(0, 0);
 			updateFarmerGraphics(this.player, { x: 0, y: 0 });
@@ -191,9 +190,9 @@ export class FarmMapScene extends ex.Scene {
 	}
 
 	private handleToolKeys(): void {
-		if (this.isOwner && this.inputManager.consumePressed("Space")) {
-			this.actOnPlayerTile();
-		}
+		if (!this.isOwner) return;
+		if (!FARM_TOOLS.includes(selectedFarmItem() ?? "")) return;
+		if (this.inputManager.consumePressed("Space")) this.actOnPlayerTile();
 	}
 
 	private actOnPlayerTile(): void {
@@ -219,83 +218,53 @@ export class FarmMapScene extends ex.Scene {
 			this.emitHud();
 			return;
 		}
+
+		const item = selectedFarmItem();
+		if (
+			handleFarmPropClick(
+				item,
+				worldPos,
+				this.farmProps,
+				useGameStore.getState().activeFarm,
+				this.owner,
+				this.player.pos,
+				(message) => this.report(message),
+			)
+		)
+			return;
+
+		if (item === "fence" || item === "shovel") {
+			actOnFence(this.owner, column, row, item, this.blocks, this.player.pos, (message) =>
+				this.report(message),
+			);
+			return;
+		}
+		if (!item) {
+			this.report("Select a tool or item first.");
+			return;
+		}
+
 		if (this.blocks.isBlocked(column, row)) {
-			this.message = "Something is in the way.";
-			this.emitHud();
+			this.report("Something is in the way.");
 			return;
 		}
 		if (!isFarmInBounds(column, row)) {
-			this.message = "Too far out to farm.";
-			this.emitHud();
+			this.report("Too far out to farm.");
 			return;
 		}
 		this.performAction(column, row);
 	}
 
-	/** Resolves, validates, and dispatches one tool click on a tile. */
 	private performAction(column: number, row: number): void {
-		const farm = useGameStore.getState().activeFarm;
-		const tile = farm?.tiles.find((t) => t.x === column && t.y === row);
-		const tool = useGameStore.getState().tool;
-		const resolution = resolveAction(tool, tile, isTillableTile(column, row));
-
-		if (!resolution.ok) {
-			this.message = resolution.reason;
-			if (resolution.shake) this.camera.shake(2, 2, 180);
-			this.emitHud();
-			return;
-		}
-
-		const plan = resolution.plan;
-		let crop: CropId | undefined;
-		if (plan.kind === "plant") {
-			const seed = this.consumeSeedItem();
-			if (!seed) {
-				this.message = "Out of seeds — buy more at the market.";
-				this.emitHud();
-				return;
-			}
-			crop = seed;
-		}
-
-		this.combo.register(plan.kind, tile);
-		if (plan.tool === "scythe") {
-			this.sweepFx.play(
-				column * TILE_SIZE + TILE_SIZE / 2,
-				row * TILE_SIZE + TILE_SIZE - 14,
-			);
-		}
-		this.spread(column, row, plan);
-
-		emitFarmAction(this.owner, {
-			kind: plan.kind,
-			x: column,
-			y: row,
-			crop,
-			tool: plan.tool,
-			comboMutationMultiplier: this.combo.mutationMultiplier,
+		performFarmAction(this.owner, this.combo, this.sweepFx, column, row, {
+			message: (text) => this.report(text),
+			shake: () => this.camera.shake(2, 2, 180),
 		});
 	}
 
-	/** High combos occasionally auto-apply a water or scythe to one neighbour. */
-	private spread(column: number, row: number, plan: ActionPlan): void {
-		if (plan.kind !== "water" && plan.tool !== "scythe") return;
-		const farm = useGameStore.getState().activeFarm;
-		const kind = plan.kind === "water" ? "water" : "harvest";
-		const multiplier = this.combo.mutationMultiplier;
-		maybeSpread(this.combo.current, farm?.tiles ?? [], column, row, kind, plan.tool, (x, y, tool) =>
-			emitFarmAction(this.owner, { kind, x, y, tool, comboMutationMultiplier: multiplier }),
-		);
-	}
-
-	/** Spends one selected seed and returns the crop it plants, if any. */
-	private consumeSeedItem(): CropId | null {
-		const inventory = useInventoryStore.getState();
-		const itemId = inventory.hotbar[inventory.selectedHotbar]?.itemId ?? undefined;
-		const crop = cropForSeedItem(itemId);
-		if (!crop || !itemId || countItem(inventory, itemId) < 1) return null;
-		inventory.removeItem(itemId as ItemId, 1);
-		return crop;
+	private report(text: string): void {
+		this.message = text;
+		this.emitHud();
 	}
 
 	private syncTilesFromServer(): void {

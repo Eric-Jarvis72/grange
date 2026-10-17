@@ -17,6 +17,17 @@ describe("inventory slots", () => {
 		expect(countItem(useInventoryStore.getState(), "seed-bag")).toBe(10);
 		expect(countItem(useInventoryStore.getState(), "tomato")).toBe(0);
 		expect(grid.every((slot) => slot.itemId === null)).toBe(true);
+		expect(hotbar[5]).toMatchObject({ itemId: "fence", count: 20 });
+		expect(hotbar[6]).toMatchObject({ itemId: "shovel", count: 1 });
+	});
+
+	it("syncs server fence stock without losing the selected fence slot", () => {
+		const store = useInventoryStore.getState();
+		store.selectHotbar(5);
+		store.setItemCount("fence", 0);
+		expect(useInventoryStore.getState().hotbar[5]).toMatchObject({ itemId: "fence", count: 0 });
+		store.setItemCount("fence", 19);
+		expect(countItem(useInventoryStore.getState(), "fence")).toBe(19);
 	});
 
 	it("keeps no currency item in slots", () => {

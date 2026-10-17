@@ -27,12 +27,18 @@ export type PropKey =
 	| "sign"
 	| "barrel"
 	| "crate"
-	| "fence-horizontal"
-	| "fence-post"
 	| "daisies"
 	| "marigolds"
 	| "blue-flowers"
 	| "starter-train";
+
+export type MovablePropKey = Exclude<PropKey, "starter-train">;
+export const MOVABLE_PROP_ASSETS: readonly MovablePropKey[] = [
+	"farmhouse", "barn", "well", "bench", "sign", "barrel", "crate",
+	"oak-tree", "pine-tree", "apple-tree", "daisies", "marigolds", "blue-flowers",
+];
+export const isMovablePropAsset = (asset: string): asset is MovablePropKey =>
+	MOVABLE_PROP_ASSETS.includes(asset as MovablePropKey);
 
 export interface MapProp {
 	asset: PropKey;
@@ -137,11 +143,9 @@ export const propBlocking: Record<PropKey, PropBlockingRule> = {
 	sign: "rect",
 	barrel: "rect",
 	crate: "rect",
-	"fence-horizontal": "rect",
-	"fence-post": "rect",
-	daisies: "none",
-	marigolds: "none",
-	"blue-flowers": "none",
+	daisies: "base",
+	marigolds: "base",
+	"blue-flowers": "base",
 	"starter-train": "rect",
 };
 
@@ -166,17 +170,3 @@ export const props: MapProp[] = [
 	{ asset: "blue-flowers", x: 1015, y: 410, width: 50 },
 	{ asset: "daisies", x: 150, y: 475, width: 50 },
 ];
-
-for (const x of [465, 555, 645, 735]) {
-	props.push({ asset: "fence-horizontal", x, y: 380, width: 86 });
-}
-
-// Leave a lower opening for future field interactions instead of using a decorative gate.
-for (const x of [465, 555, 735]) {
-	props.push({ asset: "fence-horizontal", x, y: 590, width: 86 });
-}
-
-for (const y of [440, 505, 570]) {
-	props.push({ asset: "fence-post", x: 420, y, width: 42 });
-	props.push({ asset: "fence-post", x: 780, y, width: 42 });
-}

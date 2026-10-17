@@ -1,4 +1,5 @@
 import { type CasinoAssetKey, casinoProps } from "./casinoData";
+import { fenceObstacles, type FenceCoord } from "./fenceData";
 import { MAP_HEIGHT, MAP_WIDTH, type PropKey, props } from "./mapData";
 import { type MarketplacePropKey, marketplaceProps } from "./marketplaceData";
 import {
@@ -7,7 +8,7 @@ import {
 	type WalkObstacle,
 } from "./walkCollisions";
 
-const farmFootprints: Partial<Record<PropKey, PropFootprint>> = {
+export const farmFootprints: Partial<Record<PropKey, PropFootprint>> = {
 	farmhouse: { width: 0.9, depth: 130 },
 	barn: { width: 0.9, depth: 135 },
 	"oak-tree": { width: 0.38, depth: 27 },
@@ -18,9 +19,15 @@ const farmFootprints: Partial<Record<PropKey, PropFootprint>> = {
 	sign: { width: 0.4, depth: 25 },
 	barrel: { width: 0.75, depth: 30 },
 	crate: { width: 0.8, depth: 30 },
-	"fence-horizontal": { width: 1, depth: 25 },
-	"fence-post": { width: 0.65, depth: 38 },
 	"starter-train": { width: 0.9, depth: 65 },
+};
+
+/** Flowers take up a little ground when placing props, but remain walk-through. */
+export const farmPlacementFootprints: Partial<Record<PropKey, PropFootprint>> = {
+	...farmFootprints,
+	daisies: { width: 0.7, depth: 18 },
+	marigolds: { width: 0.7, depth: 18 },
+	"blue-flowers": { width: 0.7, depth: 18 },
 };
 
 const marketplaceFootprints: Partial<
@@ -60,6 +67,33 @@ export const farmWalkObstacles: WalkObstacle[] = [
 	...propObstacles(props, farmFootprints),
 	{ left: 0, right: MAP_WIDTH, top: 11 * 64, bottom: MAP_HEIGHT },
 ];
+
+export const farmPlacementObstacles: WalkObstacle[] = [];
+
+let currentFarmProps = props;
+let currentFarmFences: FenceCoord[] = [];
+function rebuildFarmObstacles(): void {
+	farmWalkObstacles.splice(0, Infinity,
+		...propObstacles(currentFarmProps, farmFootprints),
+		...fenceObstacles(currentFarmFences),
+		{ left: 0, right: MAP_WIDTH, top: 11 * 64, bottom: MAP_HEIGHT });
+	farmPlacementObstacles.splice(0, Infinity,
+		...propObstacles(currentFarmProps, farmPlacementFootprints),
+		...fenceObstacles(currentFarmFences),
+		{ left: 0, right: MAP_WIDTH, top: 11 * 64, bottom: MAP_HEIGHT });
+}
+
+rebuildFarmObstacles();
+
+export function setFarmPropObstacles(next: typeof props): void {
+	currentFarmProps = next;
+	rebuildFarmObstacles();
+}
+
+export function setFarmFenceObstacles(coords: FenceCoord[]): void {
+	currentFarmFences = coords;
+	rebuildFarmObstacles();
+}
 
 export const marketplaceWalkObstacles = propObstacles(
 	marketplaceProps,

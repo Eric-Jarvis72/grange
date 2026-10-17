@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { fenceBlockedTiles } from "./fenceData";
 import {
 	BlockRegistry,
 	decorByTile,
@@ -17,34 +18,30 @@ const ASPECTS: Record<string, number> = {
 	sign: 271 / 203,
 	barrel: 250 / 206,
 	crate: 210 / 226,
-	"fence-horizontal": 184 / 322,
-	"fence-post": 229 / 135,
 };
-
-const RAIL_ASPECT = ASPECTS["fence-horizontal"];
 
 function keySet(tiles: Array<{ column: number; row: number }>): Set<string> {
 	return new Set(tiles.map((tile) => tileKey(tile.column, tile.row)));
 }
 
 describe("rectFootprintTiles", () => {
-	it("covers every tile a fence rail touches", () => {
-		const tiles = keySet(rectFootprintTiles(465, 380, 86, 86 * RAIL_ASPECT));
+	it("covers every tile a rect touches", () => {
+		const tiles = keySet(rectFootprintTiles(465, 380, 86, 49));
 		expect(tiles).toEqual(new Set(["6,5", "7,5"]));
 	});
 
 	it("spans rows when a rail straddles a boundary", () => {
-		const tiles = keySet(rectFootprintTiles(555, 590, 86, 86 * RAIL_ASPECT));
+		const tiles = keySet(rectFootprintTiles(555, 590, 86, 49));
 		expect(tiles).toEqual(new Set(["8,8", "9,8", "8,9", "9,9"]));
 	});
 
 	it("includes sliver overlaps under the strict rule", () => {
-		const tiles = keySet(rectFootprintTiles(735, 380, 86, 86 * RAIL_ASPECT));
+		const tiles = keySet(rectFootprintTiles(735, 380, 86, 49));
 		expect(tiles.has("12,5")).toBe(true);
 	});
 
 	it("does not bleed across an exact tile boundary", () => {
-		const tiles = keySet(rectFootprintTiles(725, 380, 86, 86 * RAIL_ASPECT));
+		const tiles = keySet(rectFootprintTiles(725, 380, 86, 49));
 		expect(tiles.has("12,5")).toBe(false);
 		expect(tiles.has("11,5")).toBe(true);
 	});
@@ -63,11 +60,9 @@ describe("groundFootprintTiles", () => {
 });
 
 describe("decorByTile", () => {
-	it("maps flower props to their anchor tiles", () => {
+	it("does not treat shovel-movable flowers as disposable decor", () => {
 		const decor = decorByTile(props);
-		expect(decor.get("11,3")?.length).toBe(1);
-		expect(props[decor.get("11,3")?.[0] ?? -1].asset).toBe("marigolds");
-		expect(decor.get("2,7")?.length).toBe(1);
+		expect(decor.size).toBe(0);
 	});
 
 	it("ignores blocking props", () => {
@@ -79,14 +74,13 @@ describe("decorByTile", () => {
 		}
 	});
 
-	it("groups multiple decor props sharing a tile", () => {
+	it("ignores blocking props even when they share a tile", () => {
 		const decor = decorByTile([
 			{ asset: "daisies", x: 10, y: 10, width: 52 },
 			{ asset: "marigolds", x: 20, y: 20, width: 52 },
 			{ asset: "well", x: 500, y: 500, width: 96 },
 		]);
-		expect(decor.get("0,0")).toEqual([0, 1]);
-		expect(decor.size).toBe(1);
+		expect(decor.size).toBe(0);
 	});
 });
 
@@ -140,20 +134,17 @@ describe("initial prop blocking", () => {
 				);
 			}
 		});
+		blocks.add("field-fence", fenceBlockedTiles([]));
 		return blocks;
 	}
 
-	it("blocks the fence lines", () => {
+	it("starts without fence-blocked tiles, then blocks placed posts", () => {
 		const blocks = seedRegistry();
-		for (let column = 6; column <= 12; column += 1) {
-			expect(blocks.isBlocked(column, 5)).toBe(true);
-			expect(blocks.isBlocked(column, 9)).toBe(true);
-		}
-		for (const row of [6, 7, 8]) {
-			expect(blocks.isBlocked(6, row)).toBe(true);
-			expect(blocks.isBlocked(11, row)).toBe(true);
-			expect(blocks.isBlocked(12, row)).toBe(true);
-		}
+		expect(blocks.isBlocked(8, 7)).toBe(false);
+		blocks.add("field-fence", fenceBlockedTiles([{ x: 8, y: 7 }]));
+		expect(blocks.isBlocked(8, 7)).toBe(true);
+		blocks.add("field-fence", fenceBlockedTiles([]));
+		expect(blocks.isBlocked(8, 7)).toBe(false);
 	});
 
 	it("blocks building, tree, and furniture bases", () => {
@@ -183,10 +174,10 @@ describe("initial prop blocking", () => {
 		expect(blocks.isBlocked(10, 0)).toBe(false);
 	});
 
-	it("leaves flowers and open field tiles alone", () => {
+	it("blocks movable flowers until shoveled, leaving the field open", () => {
 		const blocks = seedRegistry();
-		expect(blocks.isBlocked(11, 3)).toBe(false);
-		expect(blocks.isBlocked(2, 7)).toBe(false);
+		expect(blocks.isBlocked(11, 3)).toBe(true);
+		expect(blocks.isBlocked(2, 7)).toBe(true);
 		for (const row of [6, 7]) {
 			for (let column = 7; column <= 10; column += 1) {
 				expect(blocks.isBlocked(column, row)).toBe(false);

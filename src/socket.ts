@@ -1,5 +1,5 @@
 import { type Channel, Socket } from "phoenix";
-import type { ActiveFarm, FarmAction, FarmSummary, Player } from "../shared/types";
+import type { ActiveFarm, FarmAction, FarmPropAction, FarmSummary, Player } from "../shared/types";
 import { useGameStore } from "./store";
 
 /** Session token used to authenticate the socket handshake. */
@@ -144,6 +144,25 @@ export function emitFarmAction(
 		.receive("ok", () => cb?.({ ok: true }))
 		.receive("error", (payload: unknown) =>
 			cb?.({ ok: false, error: reasonOf(payload) ?? "Invalid action" }),
+		)
+		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
+}
+
+export function emitFarmPropAction(
+	owner: string,
+	action: FarmPropAction,
+	cb?: (res: Ack) => void,
+): void {
+	const channel = farmChannel;
+	if (!channel || farmOwner !== owner) {
+		cb?.({ ok: false, error: "not visiting farm" });
+		return;
+	}
+	channel
+		.push("farmPropAction", { action })
+		.receive("ok", () => cb?.({ ok: true }))
+		.receive("error", (payload: unknown) =>
+			cb?.({ ok: false, error: reasonOf(payload) ?? "Invalid object action" }),
 		)
 		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
 }

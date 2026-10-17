@@ -412,46 +412,6 @@
   ],
   "objects": [
     {
-      "name": "fence-horizontal",
-      "file": "objects/fence-horizontal.webp",
-      "width": 322,
-      "height": 184,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "name": "fence-post",
-      "file": "objects/fence-post.webp",
-      "width": 135,
-      "height": 229,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "name": "fence-corner",
-      "file": "objects/fence-corner.webp",
-      "width": 267,
-      "height": 205,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
-      "name": "fence-gate",
-      "file": "objects/fence-gate.webp",
-      "width": 314,
-      "height": 197,
-      "anchor": [
-        0.5,
-        1.0
-      ]
-    },
-    {
       "name": "crate",
       "file": "objects/crate.webp",
       "width": 226,
@@ -636,6 +596,34 @@
     "directory": "../tools",
     "scythes": ["scythe_basic.webp", "scythe_iron.webp", "scythe_runed.webp"],
     "sweepFx": ["sweep_fx_0.webp", "sweep_fx_1.webp", "sweep_fx_2.webp"]
+  },
+  "fences": {
+    "source": "Modular wooden fence sprite atlas.png",
+    "notes": "Exact lossless atlas crops. Per-piece post anchors are in src/world/fenceRendering.ts.",
+    "images": [
+      { "name": "post", "file": "fences/post.webp", "width": 250, "height": 220 },
+      { "name": "rail-horizontal", "file": "fences/rail-horizontal.webp", "width": 108, "height": 82 },
+      { "name": "rail-vertical", "file": "fences/rail-vertical.webp", "width": 70, "height": 45 },
+      { "name": "end-north", "file": "fences/end-north.webp", "width": 250, "height": 225 },
+      { "name": "end-east", "file": "fences/end-east.webp", "width": 265, "height": 225 },
+      { "name": "end-south", "file": "fences/end-south.webp", "width": 250, "height": 225 },
+      { "name": "end-west", "file": "fences/end-west.webp", "width": 260, "height": 245 },
+      { "name": "vertical", "file": "fences/vertical.webp", "width": 250, "height": 245 },
+      { "name": "horizontal", "file": "fences/horizontal.webp", "width": 285, "height": 245 },
+      { "name": "corner-ne", "file": "fences/corner-ne.webp", "width": 270, "height": 245 },
+      { "name": "corner-se", "file": "fences/corner-se.webp", "width": 250, "height": 245 },
+      { "name": "corner-sw", "file": "fences/corner-sw.webp", "width": 260, "height": 245 },
+      { "name": "corner-nw", "file": "fences/corner-nw.webp", "width": 280, "height": 245 },
+      { "name": "tee-nes", "file": "fences/tee-nes.webp", "width": 290, "height": 245 },
+      { "name": "tee-esw", "file": "fences/tee-esw.webp", "width": 280, "height": 235 },
+      { "name": "tee-nsw", "file": "fences/tee-nsw.webp", "width": 260, "height": 235 },
+      { "name": "tee-new", "file": "fences/tee-new.webp", "width": 290, "height": 235 },
+      { "name": "cross", "file": "fences/cross.webp", "width": 295, "height": 235 },
+      { "name": "gate-closed-horizontal", "file": "fences/gate-closed-horizontal.webp", "width": 300, "height": 249 },
+      { "name": "gate-open-horizontal", "file": "fences/gate-open-horizontal.webp", "width": 310, "height": 249 },
+      { "name": "gate-closed-vertical", "file": "fences/gate-closed-vertical.webp", "width": 240, "height": 249 },
+      { "name": "gate-open-vertical", "file": "fences/gate-open-vertical.webp", "width": 275, "height": 249 }
+    ]
   },
   "sources": [
     "ChatGPT Image Sep 28, 2026, 10_29_54 PM-1.png",

@@ -50,14 +50,12 @@ describe("farm map data", () => {
 		for (const asset of assets) {
 			expect(propBlocking[asset]).toBeDefined();
 		}
-		expect(propBlocking["fence-horizontal"]).toBe("rect");
-		expect(propBlocking["fence-post"]).toBe("rect");
 		expect(propBlocking.farmhouse).toBe("rect");
 		expect(propBlocking.well).toBe("rect");
 		expect(propBlocking["oak-tree"]).toBe("base");
-		expect(propBlocking.daisies).toBe("none");
-		expect(propBlocking.marigolds).toBe("none");
-		expect(propBlocking["blue-flowers"]).toBe("none");
+		expect(propBlocking.daisies).toBe("base");
+		expect(propBlocking.marigolds).toBe("base");
+		expect(propBlocking["blue-flowers"]).toBe("base");
 	});
 
 	it("creates the main path intersection", () => {

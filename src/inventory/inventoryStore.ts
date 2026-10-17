@@ -35,6 +35,8 @@ function buildInitialHotbar(): InventorySlot[] {
 	hotbar[1] = stack("seed-bag", 10);
 	hotbar[2] = stack("watering-can", 1);
 	hotbar[3] = stack("scythe", 1);
+	hotbar[5] = stack("fence", 20);
+	hotbar[6] = stack("shovel", 1);
 	return hotbar;
 }
 
@@ -52,6 +54,7 @@ interface InventoryState {
 	/** Removes up to `count` of an item across slots. Returns how many were removed. */
 	removeItem: (itemId: ItemId, count: number) => number;
 	removeAt: (ref: SlotRef, count: number) => void;
+	setItemCount: (itemId: ItemId, count: number) => void;
 	resetInventory: () => void;
 }
 
@@ -202,6 +205,33 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 		const target = ref.area === "grid" ? nextGrid : nextHotbar;
 		target[ref.index] =
 			next <= 0 ? emptySlot() : { itemId: slot.itemId, count: next };
+		set({ grid: nextGrid, hotbar: nextHotbar });
+	},
+
+	setItemCount: (itemId, count) => {
+		const state = get();
+		if (count <= 0 && itemId !== "fence" &&
+			!state.hotbar.some((slot) => slot.itemId === itemId) &&
+			!state.grid.some((slot) => slot.itemId === itemId)) return;
+		const nextGrid = state.grid.map((slot) => slot.itemId === itemId ? emptySlot() : slot);
+		const nextHotbar = state.hotbar.map((slot) => slot.itemId === itemId ? emptySlot() : slot);
+		if (count <= 0 && itemId !== "fence") {
+			set({ grid: nextGrid, hotbar: nextHotbar });
+			return;
+		}
+		const hotbarIndex = state.hotbar.findIndex((slot) => slot.itemId === itemId);
+		const gridIndex = state.grid.findIndex((slot) => slot.itemId === itemId);
+		const next = stack(itemId, Math.max(0, Math.min(count, ITEMS[itemId].maxStack)));
+		if (hotbarIndex >= 0) nextHotbar[hotbarIndex] = next;
+		else if (gridIndex >= 0) nextGrid[gridIndex] = next;
+		else {
+			const freeHotbar = nextHotbar.findIndex((slot) => !slot.itemId);
+			if (freeHotbar >= 0) nextHotbar[freeHotbar] = next;
+			else {
+				const freeGrid = nextGrid.findIndex((slot) => !slot.itemId);
+				if (freeGrid >= 0) nextGrid[freeGrid] = next;
+			}
+		}
 		set({ grid: nextGrid, hotbar: nextHotbar });
 	},
 

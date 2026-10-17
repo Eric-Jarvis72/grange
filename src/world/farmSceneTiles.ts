@@ -1,16 +1,12 @@
 import type * as ex from "excalibur";
 import type { ActiveFarm } from "../../shared/types";
 import type { CropLayer } from "./cropLayer";
-import type { MapProp } from "./mapData";
-import { clearDecorAt, refreshTile } from "./tileSync";
+import { refreshTile } from "./tileSync";
 
 export interface TileSyncDeps {
 	terrain: ex.TileMap;
 	sheet: ex.SpriteSheet;
 	crops: CropLayer;
-	decor: Map<string, number[]>;
-	propActors: Array<ex.Actor | undefined>;
-	props: MapProp[];
 }
 
 /**
@@ -71,19 +67,6 @@ export class FarmTileSync {
 		row: number,
 		tile: ActiveFarm["tiles"][number] | undefined,
 	): void {
-		refreshTile(
-			this.deps.terrain,
-			this.deps.sheet,
-			this.deps.crops,
-			column,
-			row,
-			tile,
-		);
-		clearDecorAt(
-			this.deps.decor,
-			this.deps.propActors,
-			this.deps.props,
-			`${column},${row}`,
-		);
+		refreshTile(this.deps.terrain, this.deps.sheet, this.deps.crops, column, row, tile);
 	}
 }

@@ -10,7 +10,8 @@ is larger than the repository's 1 MiB limit.
 - `terrain/`: the same sixteen tiles as individual files.
 - `plants/`: sixteen tightly cropped transparent sprites.
 - `buildings/`: four tightly cropped transparent sprites.
-- `objects/`: sixteen tightly cropped transparent sprites.
+- `objects/`: non-fence object sprites.
+- `fences/`: twenty lossless transparent pieces split from the modular fence atlas.
 - `manifest.json`: filenames, pixel dimensions, normalized anchors, and terrain frame positions.
 
 All files are below 1 MiB. Transparent sprites use a bottom-center anchor (`0.5, 1`); terrain tiles
@@ -39,7 +40,7 @@ columns, a tile's Phaser frame index is `row * 4 + column`.
 
 ## Regeneration
 
-The preparation script requires Python 3 with OpenCV and Google's `cwebp` command. Run it from the
+The original four-sheet preparation script requires Python 3 with OpenCV and Google's `cwebp` command. Run it from the
 repository root with an empty output directory:
 
 ```sh
@@ -54,3 +55,14 @@ python3 .tools/prepare_farm_assets.py \
 The script detects the transparent sprites as connected components, orders them in reading order,
 crops them with a small transparent margin, cleans low-alpha edge contamination, and writes WebP at
 quality 92 with maximum alpha quality. Confirm the source artwork's usage rights before publishing.
+
+The fence pieces were cropped losslessly from `Modular wooden fence sprite atlas.png`.
+Placed posts snap to terrain-tile centers, 64px apart. Adjacent posts draw one shared
+`rail-horizontal.webp` or `rail-vertical.webp` connection, and `post.webp` covers its ends.
+The placement graph is in `src/world/fenceData.ts`; `src/world/fenceRendering.ts` owns the
+sprite layer. Farms start without fences; owners place Fence inventory items and dig them up
+with the Shovel. Four gate variants remain prepared for a later gate feature.
+
+The same Shovel picks up all starter farm props except the train. Each farm saves moved
+positions and carried objects independently. Move a prop from inventory to the hotbar,
+select it, and click clear ground to place it; the farmhouse and barn work this way too.

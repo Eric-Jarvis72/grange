@@ -65,4 +65,4 @@ jobs:
           rsync -az deploy/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh"
 
       - name: Restart
-        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" "APP_PORT=$APP_PORT bash $DEPLOY_PATH/deploy.sh"
+        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" "APP_PORT=$APP_PORT APP_HOST=$DEPLOY_HOST bash $DEPLOY_PATH/deploy.sh"

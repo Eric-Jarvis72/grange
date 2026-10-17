@@ -12,6 +12,7 @@ defmodule Grange.FarmRecord do
   @primary_key {:owner, :string, autogenerate: false}
   schema "farms" do
     field(:tomatoes, :integer, default: 0)
+    field(:fence_count, :integer, default: 20)
     has_many(:tiles, Grange.Tile, foreign_key: :owner, references: :owner)
     has_many(:barn_items, Grange.BarnItem, foreign_key: :owner, references: :owner)
     timestamps(type: :utc_datetime_usec)
@@ -20,6 +21,7 @@ defmodule Grange.FarmRecord do
   @type t :: %__MODULE__{
           owner: String.t(),
           tomatoes: non_neg_integer(),
+          fence_count: non_neg_integer(),
           tiles: [Grange.Tile.t()] | Ecto.Association.NotLoaded.t(),
           barn_items: [Grange.BarnItem.t()] | Ecto.Association.NotLoaded.t(),
           inserted_at: DateTime.t() | nil,
