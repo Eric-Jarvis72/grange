@@ -17,15 +17,24 @@ export interface SceneInteraction {
 	position: ex.Vector;
 	prompt: string;
 	radius?: number;
+	/** Controls whether the prompt shows; omit to always allow. */
+	canInteract?: () => boolean;
 	/** Travel to another scene when pressed. Omit for an in-place action. */
 	destination?: WorldSceneName;
 	destinationSpawn?: SceneSpawn;
+	/** When true, the destination's train plays its arrival animation. */
+	trainArriving?: boolean;
+	/** Runs after the interaction starts but before scene travel, e.g. to play
+	 * the train's departure animation. */
+	onTravel?: () => Promise<void>;
 	/** Runs instead of scene travel when the interaction is triggered. */
 	action?: () => void;
 }
 
-interface SceneActivationData {
+export interface SceneActivationData {
 	spawn?: SceneSpawn;
+	/** Set by a train trip so the arriving scene slides the train in. */
+	trainArriving?: boolean;
 }
 
 interface WalkingSceneOptions {
@@ -92,6 +101,12 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 
 	override onPreUpdate(engine: ex.Engine, delta: number): void {
 		if (!this.inputManager || this.paused) return;
+		// Freeze the player while a travel animation (the train leaving) plays.
+		if (this.traveling) {
+			this.player.vel = ex.Vector.Zero;
+			updateFarmerGraphics(this.player, { x: 0, y: 0 });
+			return;
+		}
 		const direction = this.inputManager.getMovementVector();
 		updateWalkingPlayer(
 			this.player,
@@ -104,15 +119,12 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 
 		const interaction = this.options.interactions.find(
 			(candidate) =>
+				(candidate.canInteract?.() ?? true) &&
 				this.player.pos.distance(candidate.position) <=
-				(candidate.radius ?? 115),
+					(candidate.radius ?? 115),
 		);
 		this.setPrompt(interaction?.prompt ?? null);
-		if (
-			interaction &&
-			!this.traveling &&
-			this.inputManager.consumePress("KeyE", "Enter")
-		) {
+		if (interaction && this.inputManager.consumePress("KeyE", "Enter")) {
 			this.setPrompt(null);
 			if (interaction.action) {
 				interaction.action();
@@ -120,10 +132,23 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 			}
 			if (!interaction.destination) return;
 			this.traveling = true;
-			void engine.goToScene(interaction.destination, {
-				sceneActivationData: { spawn: interaction.destinationSpawn },
-			});
+			void this.travelTo(engine, interaction);
 		}
+	}
+
+	/** Plays any pre-travel animation, then hands off to the destination scene. */
+	private async travelTo(
+		engine: ex.Engine,
+		interaction: SceneInteraction,
+	): Promise<void> {
+		if (interaction.onTravel) await interaction.onTravel();
+		if (!interaction.destination) return;
+		await engine.goToScene(interaction.destination, {
+			sceneActivationData: {
+				spawn: interaction.destinationSpawn,
+				trainArriving: interaction.trainArriving,
+			},
+		});
 	}
 
 	override onDeactivate(): void {

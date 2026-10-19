@@ -11,6 +11,19 @@ export const image = (path: string) =>
 
 export const terrainImage = image("farm/terrain.webp");
 export const trainImage = image("transport/starter-train.webp");
+export const trainTracksImage = image("transport/train-tracks.webp");
+/** The two extra wheel poses the train cycles through while it is moving. The
+ * parked art (`trainImage`) is the third pose, so the loop reads end to end. */
+export const trainFrameImages = [
+	image("transport/train-animation-1.webp"),
+	image("transport/train-animation-2.webp"),
+];
+/** Smoke puffs cycled small -> med -> big in lockstep with the three wheel
+ * poses while the train is moving. */
+export const smokeSmallImage = image("transport/smokeSmall.png");
+export const smokeMedImage = image("transport/smokeMed.png");
+export const smokeBigImage = image("transport/smokeBig.png");
+export const smokeImages = [smokeSmallImage, smokeMedImage, smokeBigImage];
 
 /** One image per growth stage of every registered crop. */
 export const cropStageImages: Record<CropId, ex.ImageSource[]> = Object.fromEntries(
@@ -61,6 +74,9 @@ export const resources = [
 	terrainImage,
 	...fenceResources,
 	farmerImage,
+	trainTracksImage,
+	...trainFrameImages,
+	...smokeImages,
 	...Object.values(propImages),
 	...Object.values(cropStageImages).flat(),
 	...Object.values(cropHarvestedImages),

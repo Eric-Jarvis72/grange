@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	ANIMATED_PROPS,
 	FARM_TRAIN_ENGINE_STOP,
 	FARM_TRAIN_STOP,
 	isNearFarmTrain,
@@ -89,5 +90,13 @@ describe("farm map data", () => {
 		expect(isNearFarmTrain(1050, 530)).toBe(true);
 		expect(isNearFarmTrain(1130, 530)).toBe(true);
 		expect(isNearFarmTrain(1060, 450)).toBe(false);
+	});
+
+	it("marks the train as scene-animated so static renderers skip it", () => {
+		expect(ANIMATED_PROPS.has("starter-train")).toBe(true);
+		for (const prop of props) {
+			if (prop.asset === "starter-train") continue;
+			expect(ANIMATED_PROPS.has(prop.asset)).toBe(false);
+		}
 	});
 });

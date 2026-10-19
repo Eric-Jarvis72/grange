@@ -1,5 +1,11 @@
 import * as ex from "excalibur";
-import { MAP_COLUMNS, MAP_ROWS, TILE_SIZE, type TerrainKey } from "./mapData";
+import {
+	ANIMATED_PROPS,
+	MAP_COLUMNS,
+	MAP_ROWS,
+	type TerrainKey,
+	TILE_SIZE,
+} from "./mapData";
 import { terrainFrames, terrainImage } from "./resources";
 
 export interface RenderedProp<Asset extends string> {
@@ -42,12 +48,14 @@ export function addTerrain(
 	scene.add(terrain);
 }
 
+/** Draws each prop's still sprite, skipping any the scene animates itself. */
 export function addProps<Asset extends string>(
 	scene: ex.Scene,
 	props: RenderedProp<Asset>[],
 	images: Record<Asset, ex.ImageSource>,
 ): void {
 	for (const prop of props) {
+		if (ANIMATED_PROPS.has(prop.asset)) continue;
 		const source = images[prop.asset];
 		const sprite = source.toSprite();
 		const scale = prop.width / source.width;

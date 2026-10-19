@@ -3,6 +3,7 @@ import {
 	register,
 	resetServer,
 	uniqueName,
+	waitForTrainStop,
 	walkUntilPrompt,
 } from "./helpers";
 
@@ -21,16 +22,10 @@ test("the poker table opens a playable sub-screen", async ({ page }) => {
 	await expect(prompt).toContainText("travel to the marketplace");
 	await page.keyboard.press("e");
 	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/);
+	await waitForTrainStop(page);
 
 	// Marketplace -> casino.
-	await page.keyboard.down("w");
-	await page.keyboard.down("d");
-	await page.waitForTimeout(2_900);
-	await page.keyboard.up("w");
-	await page.keyboard.up("d");
-	await page.keyboard.down("d");
-	await page.waitForTimeout(1_200);
-	await page.keyboard.up("d");
+	await walkUntilPrompt(page, ["w"], "enter the casino");
 	await expect(prompt).toContainText("enter the casino");
 	await page.keyboard.press("e");
 	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/);

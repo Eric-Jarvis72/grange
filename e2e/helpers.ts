@@ -111,6 +111,32 @@ export async function walkUntilPrompt(
 	}
 }
 
+/** Waits for the arriving train to park so the player can move again. The
+ * marketplace spawn sits beside the train, so its prompt appears once idle. */
+export async function waitForTrainStop(page: Page): Promise<void> {
+	await expect(page.getByTestId("travel-prompt")).toContainText(
+		"return to the farm",
+	);
+}
+
+/**
+ * Walks from the marketplace spawn to the seed market door. Heads north first
+ * into the clear lane between the shop fronts (bottom y=300) and the stall
+ * tops (y~450), then walks straight west until the seed prompt shows. A
+ * straight-west walk avoids wedging diagonally into the produce-cart/barrel
+ * row and ends stopped inside the prompt radius instead of streaking through
+ * it on a diagonal.
+ */
+export async function walkToSeedMarket(
+	page: Page,
+	timeout = 20_000,
+): Promise<void> {
+	await page.keyboard.down("w");
+	await page.waitForTimeout(1_300);
+	await page.keyboard.up("w");
+	await walkUntilPrompt(page, ["a"], "enter the seed market", timeout);
+}
+
 /** Walks from the farm spawn through the marketplace and into the casino. */
 export async function walkToCasino(page: Page): Promise<void> {
 	const canvas = page.locator("canvas");
@@ -122,16 +148,9 @@ export async function walkToCasino(page: Page): Promise<void> {
 	await expect(prompt).toContainText("travel to the marketplace");
 	await page.keyboard.press("e");
 	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/);
+	await waitForTrainStop(page);
 
-	await page.keyboard.down("w");
-	await page.keyboard.down("d");
-	await page.waitForTimeout(2_900);
-	await page.keyboard.up("w");
-	await page.keyboard.up("d");
-	await page.keyboard.down("d");
-	await page.waitForTimeout(1_200);
-	await page.keyboard.up("d");
-	await expect(prompt).toContainText("enter the casino");
+	await walkUntilPrompt(page, ["w"], "enter the casino");
 	await page.keyboard.press("e");
 	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/);
 }

@@ -4,7 +4,7 @@ import {
 	groundFootprintTiles,
 	rectFootprintTiles,
 } from "./blocking";
-import { propBlocking, props } from "./mapData";
+import { ANIMATED_PROPS, propBlocking, props } from "./mapData";
 import { propImages } from "./resources";
 
 /**
@@ -19,18 +19,7 @@ export function addFarmProps(
 ): void {
 	props.forEach((prop, index) => {
 		const source = propImages[prop.asset];
-		const sprite = source.toSprite();
 		const scale = prop.width / source.width;
-		sprite.scale = ex.vec(scale, scale);
-
-		const actor = new ex.Actor({
-			pos: ex.vec(prop.x, prop.y),
-			anchor: ex.vec(0.5, 1),
-			z: 100 + Math.floor(prop.y),
-		});
-		actor.graphics.use(sprite);
-		scene.add(actor);
-		propActors[index] = actor;
 
 		const rule = propBlocking[prop.asset];
 		if (rule === "rect") {
@@ -44,5 +33,18 @@ export function addFarmProps(
 				groundFootprintTiles(prop.x, prop.y, prop.width),
 			);
 		}
+
+		if (ANIMATED_PROPS.has(prop.asset)) return;
+
+		const sprite = source.toSprite();
+		sprite.scale = ex.vec(scale, scale);
+		const actor = new ex.Actor({
+			pos: ex.vec(prop.x, prop.y),
+			anchor: ex.vec(0.5, 1),
+			z: 100 + Math.floor(prop.y),
+		});
+		actor.graphics.use(sprite);
+		scene.add(actor);
+		propActors[index] = actor;
 	});
 }

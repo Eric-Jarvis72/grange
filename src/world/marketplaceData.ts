@@ -17,8 +17,8 @@ export type MarketplacePropKey =
 	| "barrel"
 	| "crate";
 
-export const MARKETPLACE_PLAYER_SPAWN = { x: 455, y: 665 } as const;
-export const MARKETPLACE_TRAIN_STOP = { x: 430, y: 665 } as const;
+export const MARKETPLACE_PLAYER_SPAWN = { x: 935, y: 620 } as const;
+export const MARKETPLACE_TRAIN_STOP = { x: 935, y: 655 } as const;
 export const MARKETPLACE_CASINO_ENTRANCE = { x: 960, y: 340 } as const;
 export const MARKETPLACE_SEED_MARKET_ENTRANCE = { x: 190, y: 350 } as const;
 export const MARKETPLACE_PRODUCE_MARKET_ENTRANCE = { x: 575, y: 350 } as const;
@@ -47,7 +47,7 @@ export const marketplaceProps: RenderedProp<MarketplacePropKey>[] = [
 	{ asset: "produce-cart", x: 375, y: 505, width: 160 },
 	{ asset: "notice-board", x: 650, y: 490, width: 140 },
 	{ asset: "signpost", x: 660, y: 685, width: 88 },
-	{ asset: "starter-train", x: 250, y: 735, width: 390 },
+	{ asset: "starter-train", x: 935, y: 735, width: 390 },
 	{ asset: "oak-tree", x: 60, y: 205, width: 105 },
 	{ asset: "pine-tree", x: 1090, y: 200, width: 100 },
 	{ asset: "daisies", x: 505, y: 465, width: 45 },
