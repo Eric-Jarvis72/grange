@@ -7,6 +7,7 @@ import {
 	registerAccount,
 	resetServer,
 	uniqueName,
+	waitForWorld,
 } from "./helpers";
 
 test("a new account registers, lands on the main menu, then enters the farm", async ({
@@ -66,6 +67,9 @@ test("a session survives a page reload", async ({ page }) => {
 
 	await page.reload();
 	await expect(page).toHaveURL(/\/world$/);
+	// The route sits behind the session guard, so wait for the farm to mount
+	// and register its hotkeys before pressing Escape.
+	await waitForWorld(page);
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("farm-map-user")).toContainText(name);
 });
