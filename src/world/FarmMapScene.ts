@@ -2,6 +2,7 @@ import * as ex from "excalibur";
 import { type FarmToolId, isFarmInBounds } from "../../shared/farm";
 import { useGameStore } from "../store";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
+import { farmToolForItem } from "../inventory/items";
 import { BlockRegistry } from "./blocking";
 import { ComboController } from "./farmCombo";
 import { useComboStore } from "./comboStore";
@@ -32,8 +33,6 @@ import { terrainFrames, terrainImage } from "./resources";
 import { SweepFx } from "./sweepFx";
 import { findTrainRest, TrainController } from "./train";
 import type { SceneActivationData, WorldArea } from "./WalkingScene";
-
-const FARM_TOOLS = ["hoe", "seed-bag", "watering-can", "scythe"];
 
 export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	onFarmUpdate: ((snapshot: FarmHudSnapshot) => void) | null = null;
@@ -130,7 +129,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		pointers.primary.on("down", (evt) => {
 			if (this.deactivated || isInventoryBlockingInput()) return;
 			const item = selectedFarmItem();
-			this.painting = FARM_TOOLS.includes(item ?? "");
+			this.painting = farmToolForItem(item) !== null;
 			this.strokeTiles.clear();
 			this.applyToolAt(evt.worldPos);
 		});
@@ -206,7 +205,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 
 	private handleToolKeys(): void {
 		if (!this.isOwner) return;
-		if (!FARM_TOOLS.includes(selectedFarmItem() ?? "")) return;
+		if (!farmToolForItem(selectedFarmItem())) return;
 		if (this.inputManager.consumePressed("Space")) this.actOnPlayerTile();
 	}
 
