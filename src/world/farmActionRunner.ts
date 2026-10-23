@@ -1,6 +1,6 @@
 import type { CropId } from "../../shared/crops";
 import { countItem, useInventoryStore } from "../inventory/inventoryStore";
-import { cropForSeedItem, type ItemId } from "../inventory/items";
+import { cropForSeedItem, farmToolForItem, type ItemId } from "../inventory/items";
 import { emitFarmAction } from "../socket";
 import { useGameStore } from "../store";
 import type { ComboController } from "./farmCombo";
@@ -29,7 +29,13 @@ export function performFarmAction(
 ): void {
 	const farm = useGameStore.getState().activeFarm;
 	const tile = farm?.tiles.find((t) => t.x === column && t.y === row);
-	const tool = useGameStore.getState().tool;
+	const inventory = useInventoryStore.getState();
+	const item = inventory.hotbar[inventory.selectedHotbar]?.itemId ?? null;
+	const tool = farmToolForItem(item);
+	if (!tool) {
+		feedback.message("Select a tool or item first.");
+		return;
+	}
 	const resolution = resolveAction(tool, tile, isTillableTile(column, row));
 
 	if (!resolution.ok) {

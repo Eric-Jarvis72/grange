@@ -1,7 +1,6 @@
 import * as ex from "excalibur";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { FarmToolId } from "../../shared/farm";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
 import { farmToolForItem } from "../inventory/items";
@@ -35,24 +34,6 @@ const worldResources = [
 	...new Set([...resources, ...marketplaceResources, ...casinoResources]),
 ];
 
-const TOOLS: Array<{ id: FarmToolId; label: string; key: string }> = [
-	{ id: "hoe", label: "Hoe", key: "1" },
-	{ id: "seed", label: "Seeds", key: "2" },
-	{ id: "bucket", label: "Bucket", key: "3" },
-	{ id: "scythe", label: "Scythe", key: "4" },
-];
-
-const TOOL_BY_KEY: Record<string, FarmToolId> = {
-	Digit1: "hoe",
-	Digit2: "seed",
-	Digit3: "bucket",
-	Digit4: "scythe",
-	Numpad1: "hoe",
-	Numpad2: "seed",
-	Numpad3: "bucket",
-	Numpad4: "scythe",
-};
-
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	useInventoryKeys();
@@ -61,10 +42,10 @@ export default function FarmMap() {
 	const casinoRef = useRef<CasinoScene | null>(null);
 	const username = useGameStore((s) => s.username);
 	const farm = useGameStore((s) => s.activeFarm);
-	const tool = useGameStore((s) => s.tool);
-	const setTool = useGameStore((s) => s.setTool);
 	const selectedHotbar = useInventoryStore((s) => s.selectedHotbar);
 	const hotbar = useInventoryStore((s) => s.hotbar);
+	const heldItem = hotbar[selectedHotbar]?.itemId ?? null;
+	const heldTool = farmToolForItem(heldItem);
 	const setItemCount = useInventoryStore((s) => s.setItemCount);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
 	const pushNotice = useNotificationStore((s) => s.push);
@@ -99,12 +80,11 @@ export default function FarmMap() {
 		return () => emitLeaveFarm();
 	}, [target, navigate]);
 
-	// Selecting a hotbar slot drives the active farm tool (the hotbar is the
-	// single tool selector). Slots with no tool item leave the tool unchanged.
+	// Selecting a hotbar slot drives the farm hint (the hotbar is the single
+	// tool selector). The action itself reads the held item directly.
 	useEffect(() => {
-		const next = farmToolForItem(hotbar[selectedHotbar]?.itemId ?? null);
-		if (next) setTool(next);
-	}, [hotbar, selectedHotbar, setTool]);
+		sceneRef.current?.setHeldTool(heldTool);
+	}, [heldTool]);
 
 	// Tell the scene an active slot changed so the combo tracker can grant its
 	// one-time chaining grace on the next different action.
@@ -113,7 +93,6 @@ export default function FarmMap() {
 		sceneRef.current?.noteHotbarSwap();
 	}, [selectedHotbar]);
 
-	const heldItem = hotbar[selectedHotbar]?.itemId;
 	useEffect(() => {
 		if (heldItem === "fence") pushNotice("Fence: click clear grass to place a post.", "system");
 		if (heldItem === "shovel") pushNotice("Shovel: click a fence or farm object to dig it up.", "system");
@@ -205,19 +184,6 @@ export default function FarmMap() {
 		};
 	}, [target, isOwner, setMarket, setMarketMessage]);
 
-	useEffect(() => {
-		function onKeyDown(event: KeyboardEvent) {
-			const next = TOOL_BY_KEY[event.code];
-			if (next) setTool(next);
-		}
-		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [setTool]);
-
-	useEffect(() => {
-		sceneRef.current?.setTool(tool);
-	}, [tool]);
-
 	// Route farm hints and errors into the bottom-left feed.
 	useEffect(() => {
 		if (hud.message) pushNotice(hud.message, "system");
@@ -278,31 +244,6 @@ export default function FarmMap() {
 			)}
 			{area === "Farm" && (
 				<div className="farm-hud" data-testid="farm-hud">
-					{isOwner ? (
-						<div
-							className="farm-tools"
-							role="toolbar"
-							aria-label="Farming tools"
-						>
-							{TOOLS.map((entry) => (
-								<button
-									key={entry.id}
-									type="button"
-									data-testid={`tool-${entry.id}`}
-									aria-pressed={tool === entry.id}
-									className={
-										tool === entry.id
-											? "farm-tool farm-tool-active"
-											: "farm-tool"
-									}
-									onClick={() => setTool(entry.id)}
-								>
-									<span className="farm-tool-key">{entry.key}</span>{" "}
-									{entry.label}
-								</button>
-							))}
-						</div>
-					) : null}
 					<div className="farm-status">
 						<span data-testid="farm-tomatoes">🍅 {hud.tomatoes}</span>
 					</div>

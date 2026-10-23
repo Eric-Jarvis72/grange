@@ -144,13 +144,11 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		});
 
 		this.camera.pos = ex.vec(MAP_WIDTH / 2, MAP_HEIGHT / 2);
-		this.message = TOOL_HINTS[useGameStore.getState().tool] ?? this.message;
-		this.emitHud();
+		this.setHeldTool(farmToolForItem(selectedFarmItem()));
 	}
 
-	setTool(tool: FarmToolId): void {
-		useGameStore.getState().setTool(tool);
-		this.message = TOOL_HINTS[tool];
+	setHeldTool(tool: FarmToolId | null): void {
+		this.message = tool ? TOOL_HINTS[tool] : "Select a tool or item first.";
 		this.emitHud();
 	}
 

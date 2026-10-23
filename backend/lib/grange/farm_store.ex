@@ -215,14 +215,19 @@ defmodule Grange.FarmStore do
   defp transform(owner, tile, :harvest, opts) do
     {crop_id, remaining} = Crops.parse_crop(tile.crop)
 
-    if Crops.can_harvest?(crop_id, opts[:tool]) do
-      Barn.add(owner, crop_id, 1)
-      families = neighbor_families(owner, tile.x, tile.y)
-      drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
-      regrow_or_clear(owner, tile, crop_id, remaining)
-      {:drops, drops}
-    else
-      {:error, "#{Crops.get(crop_id).name} needs a scythe"}
+    cond do
+      tile.state != :ready ->
+        {:error, "tile is not ready"}
+
+      Crops.can_harvest?(crop_id, opts[:tool]) ->
+        Barn.add(owner, crop_id, 1)
+        families = neighbor_families(owner, tile.x, tile.y)
+        drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
+        regrow_or_clear(owner, tile, crop_id, remaining)
+        {:drops, drops}
+
+      true ->
+        {:error, "#{Crops.get(crop_id).name} needs a scythe"}
     end
   end
 

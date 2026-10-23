@@ -205,6 +205,24 @@ defmodule Grange.FarmStoreTest do
     assert %{state: :watered} = tile_at("Alice", 5, 5)
   end
 
+  test "harvesting an immature crop is rejected and does not water it" do
+    FarmStore.ensure("Alice")
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 4, "y" => 4})
+    FarmStore.action("Alice", %{"kind" => "plant", "x" => 4, "y" => 4})
+    assert %{state: :planted} = tile_at("Alice", 4, 4)
+
+    assert {:error, "tile is not ready"} =
+             FarmStore.action("Alice", %{
+               "kind" => "harvest",
+               "x" => 4,
+               "y" => 4,
+               "tool" => "scythe"
+             })
+
+    assert FarmStore.view("Alice").barn == %{}
+    assert %{state: :planted} = tile_at("Alice", 4, 4)
+  end
+
   test "wheat cannot be harvested by hand and banks its own barn item" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 2, "y" => 2})
