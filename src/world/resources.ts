@@ -2,6 +2,7 @@ import * as ex from "excalibur";
 import { CROPS, type CropId } from "../../shared/crops";
 import { fenceResources } from "./fenceResources";
 import { farmerImage } from "./farmerSprite";
+import { horseResources, placeholderSquareImage } from "./horseResources";
 import type { PropKey, TerrainKey } from "./mapData";
 
 export const image = (path: string) =>
@@ -74,6 +75,8 @@ export const resources = [
 	terrainImage,
 	...fenceResources,
 	farmerImage,
+	...horseResources,
+	placeholderSquareImage,
 	trainTracksImage,
 	...trainFrameImages,
 	...smokeImages,

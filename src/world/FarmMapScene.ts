@@ -16,6 +16,7 @@ import { FarmPropLayer } from "./farmPropLayer";
 import { FarmPlacementPreview } from "./FarmPlacementPreview";
 import { FarmTravel } from "./FarmTravel";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
+import { HorseRiding } from "./horseRiding";
 import { hoveredFarmTile, type FarmHoveredTile, type FarmHudSnapshot } from "./farmHud";
 import { TOOL_HINTS } from "./farmTools";
 import { FarmTileSync } from "./farmSceneTiles";
@@ -33,8 +34,8 @@ import {
 	TILE_SIZE,
 	terrainAt,
 } from "./mapData";
-import { updateFarmPlayer } from "./playerMovement";
 import { terrainFrames, terrainImage } from "./resources";
+import { farmWalkObstacles } from "./sceneObstacles";
 import { SweepFx } from "./sweepFx";
 import { findTrainRest, TrainController } from "./train";
 import type { SceneActivationData, WorldArea } from "./WalkingScene";
@@ -63,6 +64,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	private lastWorldPos: ex.Vector | null = null;
 	private deactivated = false;
 	private readonly travel: FarmTravel;
+	private readonly riding: HorseRiding;
 	private train!: TrainController;
 
 	constructor(
@@ -73,6 +75,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	) {
 		super();
 		this.travel = new FarmTravel(onPromptChange, onAreaChange);
+		this.riding = new HorseRiding(onPromptChange);
 	}
 
 	override onInitialize(engine: ex.Engine): void {
@@ -132,6 +135,9 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		});
 		addFarmerGraphics(this.player);
 		this.add(this.player);
+
+		// 5. Populate the grazing horses.
+		this.riding.spawn(this, farmWalkObstacles);
 
 		const pointers = engine.input.pointers;
 		pointers.primary.on("down", (evt) => {
@@ -206,7 +212,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		if (this.fencePlacement.active && (isInventoryBlockingInput() ||
 			selectedFarmItem() !== "fence")) this.fencePlacement.clear();
 		this.train.update(delta);
-		this.player.graphics.visible = this.train.isParked();
+		this.player.graphics.visible = this.train.isParked() && !this.riding.isMounted();
 		const farm = useGameStore.getState().activeFarm;
 		this.farmProps.set(farm?.prop_overrides ?? []);
 		this.fences.set(farm?.fences ?? [], farm?.gates ?? []);
@@ -220,14 +226,13 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		}
 
 		const dir = this.inputManager.getMovementVector();
-		updateFarmPlayer(this.player, dir, delta, this.combo.moveSpeed);
-		updateFarmerGraphics(this.player, dir);
 
 		const gate = nearbyGate(farm?.gates ?? [], this.player.pos);
 		this.travel.update(this.player, this.inputManager, engine, this.train, gate?.prompt ?? null);
 		if (gate && this.inputManager.consumePress("KeyE", "Enter")) {
 			toggleGate(this.owner, gate.gate, (message) => this.report(message));
 		}
+		this.riding.update(this.player, this.inputManager, dir, delta, this.combo.moveSpeed);
 
 		if (this.isOwner) farmActionOnSpace(this.inputManager, this.player.pos,
 			(column, row) => this.performAction(column, row));
@@ -244,6 +249,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		this.painting = false;
 		this.inputManager?.destroy();
 		this.travel.deactivate();
+		this.riding.deactivate(this.player);
 		useComboStore.getState().clearCombo();
 	}
 
