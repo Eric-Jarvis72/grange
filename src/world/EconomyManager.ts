@@ -99,6 +99,20 @@ export class EconomyManager {
   }
 
   /**
+   * Clears a negative balance (a debt) back to zero and returns how much was
+   * erased. A non-negative balance is left untouched. Unlike buy/sell this is
+   * a windfall, so it reports the positive delta so the account stays in sync.
+   */
+  clearDebt(): number {
+    if (this.balance >= 0) return 0;
+    const cleared = -this.balance;
+    this.balance = 0;
+    this.notify();
+    this.onChange?.(cleared);
+    return cleared;
+  }
+
+  /**
    * Logic for selling harvested crops or goods.
    */
   sell(earnings: number): TransactionResult {

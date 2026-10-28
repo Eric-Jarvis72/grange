@@ -1,12 +1,29 @@
 import { CROPS, type CropId } from "../../shared/crops";
+import {
+	FISH,
+	FISH_ORDER,
+	type FishId,
+	RODS,
+	ROD_ORDER,
+	type RodId,
+} from "./fishingData";
 
 /** The two enterable market stalls placed in the marketplace. */
 export type MarketId = "seed" | "produce";
 
 /** A buy/sell tab shown inside a market window. */
-export type MarketCategoryId = "seeds" | "tools" | "train" | "sell";
+export type MarketCategoryId =
+	| "seeds"
+	| "tools"
+	| "train"
+	| "sell"
+	| "fish"
+	| "rods";
 
-/** A good that can be traded at a market. Produce ids double as crop ids. */
+/**
+ * A good that can be traded at a market. Produce ids double as crop ids, and
+ * fish/rod ids double as their fishing ids.
+ */
 export type MarketItemId =
 	| "tomato-seed"
 	| "wheat-seed"
@@ -16,7 +33,9 @@ export type MarketItemId =
 	| "lettuce"
 	| "midas_wheat"
 	| "frost_lettuce"
-	| "sunburst_tomato";
+	| "sunburst_tomato"
+	| FishId
+	| RodId;
 
 export interface MarketItem {
 	id: MarketItemId;
@@ -57,7 +76,33 @@ function produceItem(id: MarketItemId, crop: CropId, emoji: string): MarketItem 
 	};
 }
 
-export const MARKET_ITEMS: Record<MarketItemId, MarketItem> = {
+function fishItem(id: FishId): MarketItem {
+	const fish = FISH[id];
+	return {
+		id,
+		name: fish.name,
+		emoji: fish.emoji,
+		kind: "sell",
+		price: fish.value,
+		quantity: 1,
+		blurb: `$${fish.value} each`,
+	};
+}
+
+function rodItem(id: RodId): MarketItem {
+	const rod = RODS[id];
+	return {
+		id,
+		name: rod.name,
+		emoji: "🎣",
+		kind: "buy",
+		price: rod.cost,
+		quantity: 1,
+		blurb: `$${rod.cost.toLocaleString()} · ${rod.blurb}`,
+	};
+}
+
+export const MARKET_ITEMS = {
 	"tomato-seed": seedItem("tomato-seed", "tomato", "🌱"),
 	"wheat-seed": seedItem("wheat-seed", "wheat", "🌱"),
 	"lettuce-seed": seedItem("lettuce-seed", "lettuce", "🌱"),
@@ -67,7 +112,9 @@ export const MARKET_ITEMS: Record<MarketItemId, MarketItem> = {
 	midas_wheat: produceItem("midas_wheat", "midas_wheat", "🌟"),
 	frost_lettuce: produceItem("frost_lettuce", "frost_lettuce", "❄️"),
 	sunburst_tomato: produceItem("sunburst_tomato", "sunburst_tomato", "☀️"),
-};
+	...Object.fromEntries(FISH_ORDER.map((id) => [id, fishItem(id)])),
+	...Object.fromEntries(ROD_ORDER.map((id) => [id, rodItem(id)])),
+} as Record<MarketItemId, MarketItem>;
 
 export interface MarketCategory {
 	id: MarketCategoryId;
@@ -115,6 +162,20 @@ export const MARKET_CATEGORIES: Record<MarketCategoryId, MarketCategory> = {
 		],
 		slots: 12,
 	},
+	fish: {
+		id: "fish",
+		label: "Fish",
+		description: "Sell your catch for grangecoin.",
+		items: [...FISH_ORDER],
+		slots: 12,
+	},
+	rods: {
+		id: "rods",
+		label: "Rods",
+		description: "Upgrade your rod for better luck at the water.",
+		items: [...ROD_ORDER],
+		slots: 8,
+	},
 };
 
 export interface MarketDefinition {
@@ -135,7 +196,7 @@ export const MARKETS: Record<MarketId, MarketDefinition> = {
 	produce: {
 		id: "produce",
 		title: "Produce Market",
-		categories: ["sell", "tools", "train"],
+		categories: ["sell", "fish", "rods", "tools", "train"],
 		defaultCategory: "sell",
 	},
 };

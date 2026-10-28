@@ -141,6 +141,36 @@ describe("EconomyManager", () => {
     });
   });
 
+  describe("clearDebt", () => {
+    it("returns zero when the balance is not negative", () => {
+      const manager = new EconomyManager(100);
+      const onChange = vi.fn();
+      manager.setOnChange(onChange);
+      expect(manager.clearDebt()).toBe(0);
+      expect(manager.getBalance()).toBe(100);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("wipes a negative balance and reports the windfall", () => {
+      const manager = new EconomyManager(100);
+      const deltas: number[] = [];
+      manager.setOnChange((delta) => deltas.push(delta));
+      manager.setBalance(-40);
+      expect(manager.clearDebt()).toBe(40);
+      expect(manager.getBalance()).toBe(0);
+      expect(deltas).toEqual([40]);
+    });
+
+    it("notifies subscribers once the debt clears", () => {
+      const manager = new EconomyManager(100);
+      const seen: number[] = [];
+      manager.subscribe((balance) => seen.push(balance));
+      manager.setBalance(-5);
+      manager.clearDebt();
+      expect(seen).toEqual([100, -5, 0]);
+    });
+  });
+
   describe("canAfford", () => {
     it("is true for amounts up to the balance and false beyond it", () => {
       const manager = new EconomyManager(100);

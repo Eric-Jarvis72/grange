@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Bamboo rod">
+  <g stroke="#8a5a2b" stroke-width="5" stroke-linecap="round">
+    <line x1="10" y1="54" x2="52" y2="12"/>
+  </g>
+  <g stroke="#b57e3f" stroke-width="3" stroke-linecap="round">
+    <line x1="12" y1="52" x2="50" y2="14"/>
+  </g>
+  <g stroke="#c9a15a" stroke-width="2" stroke-linecap="round">
+    <line x1="16" y1="50" x2="18" y2="48"/>
+    <line x1="26" y1="40" x2="28" y2="38"/>
+    <line x1="36" y1="30" x2="38" y2="28"/>
+  </g>
+  <path d="M52 12 C52 26, 46 34, 40 34" fill="none" stroke="#e8f4f8" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <path d="M40 34 l-4 6 l4 4" fill="none" stroke="#dfe9ee" stroke-width="2" stroke-linecap="round"/>
+</svg>

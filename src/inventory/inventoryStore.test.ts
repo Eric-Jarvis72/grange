@@ -21,6 +21,7 @@ describe("inventory slots", () => {
 		expect(hotbar[4]).toMatchObject({ itemId: "gate", count: 2 });
 		expect(hotbar[5]).toMatchObject({ itemId: "fence", count: 20 });
 		expect(hotbar[6]).toMatchObject({ itemId: "shovel", count: 1 });
+		expect(hotbar[7]).toMatchObject({ itemId: "bamboo", count: 1 });
 	});
 
 	it("syncs server fence and gate stock without losing their slots", () => {
@@ -108,6 +109,16 @@ describe("inventory slots", () => {
 
 		expect(store.removeItem("seed-bag", 6)).toBe(6);
 		expect(useInventoryStore.getState().hotbar[1]?.itemId).toBeNull();
+	});
+
+	it("holds caught fish as stackable items and sells them away", () => {
+		const store = useInventoryStore.getState();
+		expect(store.addItem("minnow", 2)).toBe(0);
+		expect(store.addItem("minnow", 3)).toBe(0);
+		expect(countItem(useInventoryStore.getState(), "minnow")).toBe(5);
+
+		expect(store.removeItem("minnow", 4)).toBe(4);
+		expect(countItem(useInventoryStore.getState(), "minnow")).toBe(1);
 	});
 
 	it("selects hotbar slots and toggles the panel", () => {

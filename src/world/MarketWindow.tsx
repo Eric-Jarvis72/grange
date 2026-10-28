@@ -212,7 +212,9 @@ export function MarketWindow({
 											disabled={control.disabled}
 											onClick={() => control.onAction(item.quantity)}
 										>
-											{control.actionLabel}
+											{control.actionLabel === "Owned"
+												? control.actionLabel
+												: `${control.actionLabel} · $${item.price.toLocaleString()}`}
 										</button>
 									) : (
 										<>

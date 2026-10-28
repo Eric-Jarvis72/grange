@@ -7,19 +7,26 @@ Elixir/Phoenix and talks to the SPA exclusively over Phoenix Channels.
 
 1. Install <https://mise.jdx.dev/>
 2. Install the toolchains (Node, pnpm, Erlang, Elixir): `mise install`
-3. Install dependencies: `pnpm setup`
-4. Run the dev servers: `pnpm dev`
+3. Run the dev servers: `pnpm dev`
 
 Then visit <http://localhost:3000/>. In development Vite serves the SPA on 3000
 and proxies `/socket` and `/api` to Phoenix on 3200.
 
+`pnpm dev` performs the rest of the setup itself, skipping anything that is
+already in place: JS dependencies (pnpm installs them before running a script,
+and the bootstrap installs them too), Hex and the Elixir dependencies
+(`mix deps.get`), and the git hooks described below. The SQLite database needs
+no separate step - the backend creates and migrates it on boot (see
+[Database](#database)).
+
 ## Dependencies
 
-`pnpm setup` (or `pnpm bootstrap`) installs both the JS and Elixir
-dependencies. It is idempotent: if the lockfiles have not changed since the
-last run it does nothing.
+`pnpm setup` (or `pnpm bootstrap`) runs the same setup as `pnpm dev` without
+starting the servers, which is handy to pre-warm a checkout (CI runs the
+install steps directly). It is idempotent: if the lockfiles have not changed
+since the last run it does nothing.
 
-Once set up, this is automatic. `pnpm install` installs git hooks
+This is also automatic. `pnpm install` installs git hooks
 (`.githooks/`, via `core.hooksPath`) that re-run the bootstrap after a clone,
 branch switch, merge, pull, or rebase whenever a lockfile changed, so
 dependencies are downloaded for you without a manual step. Run

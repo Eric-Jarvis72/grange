@@ -60,6 +60,14 @@ export class InputManager {
 		return pressed;
 	}
 
+	/**
+	 * Forgets queued presses without touching held keys. Used when an overlay
+	 * takes over so a key still held on close cannot immediately re-trigger.
+	 */
+	clearPressed(): void {
+		this.pressedKeys.clear();
+	}
+
 	destroy(): void {
 		window.removeEventListener("keydown", this.boundKeyDown);
 		window.removeEventListener("keyup", this.boundKeyUp);

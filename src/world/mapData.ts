@@ -133,6 +133,17 @@ export function terrainAt(column: number, row: number): TerrainKey {
 	return "grass";
 }
 
+/** The water occupies the bottom row; players fish from the shore above it. */
+export const WATER_TOP = 11 * TILE_SIZE;
+
+/** How close (world pixels) a player's feet must be to the water to fish. */
+export const FISHING_REACH = 56;
+
+/** True when the player is standing close enough to the water to cast a line. */
+export function isNearWater(y: number): boolean {
+	return y >= WATER_TOP - FISHING_REACH;
+}
+
 /** Only grass-family tiles can be hoed. Paths, water, and shore are ignored. */
 export function isTillableTile(column: number, row: number): boolean {
 	const terrain = terrainAt(column, row);

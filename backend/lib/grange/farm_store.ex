@@ -27,6 +27,7 @@ defmodule Grange.FarmStore do
     FarmProp,
     FarmProps,
     FarmRecord,
+    PlayerItem,
     Repo,
     Tile
   }
@@ -127,12 +128,10 @@ defmodule Grange.FarmStore do
 
   @spec reset() :: :ok
   def reset do
-    Repo.delete_all(Tile)
-    Repo.delete_all(BarnItem)
-    Repo.delete_all(FarmFence)
-    Repo.delete_all(FarmGate)
-    Repo.delete_all(FarmProp)
-    Repo.delete_all(FarmRecord)
+    # Child tables first so foreign keys are satisfied, then the farms.
+    [Tile, BarnItem, PlayerItem, FarmFence, FarmGate, FarmProp, FarmRecord]
+    |> Enum.each(&Repo.delete_all/1)
+
     :ok
   end
 

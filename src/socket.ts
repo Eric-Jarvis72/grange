@@ -7,6 +7,9 @@ import type {
 	FarmSummary,
 	Player,
 } from "../shared/types";
+import { countItem, useInventoryStore } from "./inventory/inventoryStore";
+import { reconcileServerItems } from "./inventory/itemSync";
+import type { ItemId } from "./inventory/items";
 import { useGameStore } from "./store";
 
 /** Session token used to authenticate the socket handshake. */
@@ -45,6 +48,19 @@ function reasonOf(payload: unknown): string | undefined {
 	return undefined;
 }
 
+/**
+ * Mirrors the server's durable rods and fish into the local inventory. The
+ * server is the source of truth for those items, so they come back after a
+ * reload or on a new browser.
+ */
+function applyServerItems(items: Record<string, number> | undefined): void {
+	if (!items) return;
+	reconcileServerItems(items, {
+		addItem: (itemId, count) => useInventoryStore.getState().addItem(itemId, count),
+		countItem: (itemId) => countItem(useInventoryStore.getState(), itemId),
+	});
+}
+
 function joinLobby(): Channel {
 	if (lobby) return lobby;
 
@@ -63,12 +79,14 @@ function joinLobby(): Channel {
 	channel
 		.join()
 		.receive("ok", (payload: unknown) => {
-			const { players, farms } = payload as {
+			const { players, farms, items } = payload as {
 				players: Player[];
 				farms: FarmSummary[];
+				items?: Record<string, number>;
 			};
 			useGameStore.getState().setPlayers(players);
 			useGameStore.getState().setFarms(farms);
+			applyServerItems(items);
 		})
 		.receive("error", () => {
 			lobby = null;
@@ -76,6 +94,16 @@ function joinLobby(): Channel {
 
 	lobby = channel;
 	return channel;
+}
+
+/** Persists a rod or fish the player gained, so it survives a reload. */
+export function emitAddItem(item: ItemId, count: number): void {
+	joinLobby().push("addItem", { item, count });
+}
+
+/** Persists rods or fish the player lost (e.g. a market sale). */
+export function emitRemoveItem(item: ItemId, count: number): void {
+	joinLobby().push("removeItem", { item, count });
 }
 
 export function requestFarms(): void {

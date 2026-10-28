@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CROPS } from "../../shared/crops";
+import { FISH, FISH_ORDER, RODS, ROD_ORDER } from "./fishingData";
 import {
 	clampQuantity,
 	MARKET_CATEGORIES,
@@ -13,8 +14,14 @@ describe("market definitions", () => {
 		expect(MARKETS.seed.defaultCategory).toBe("seeds");
 	});
 
-	it("gives the produce market sell, tools, and train tabs", () => {
-		expect(MARKETS.produce.categories).toEqual(["sell", "tools", "train"]);
+	it("gives the produce market sell, fish, rods, tools, and train tabs", () => {
+		expect(MARKETS.produce.categories).toEqual([
+			"sell",
+			"fish",
+			"rods",
+			"tools",
+			"train",
+		]);
 		expect(MARKETS.produce.defaultCategory).toBe("sell");
 	});
 
@@ -62,6 +69,27 @@ describe("market definitions", () => {
 		expect(tomato.quantity).toBe(1);
 
 		expect(MARKET_ITEMS.midas_wheat.price).toBe(CROPS.midas_wheat.sellValue);
+	});
+
+	it("sells every fish at its catch value", () => {
+		expect(MARKET_CATEGORIES.fish.items).toEqual([...FISH_ORDER]);
+		for (const id of FISH_ORDER) {
+			const item = MARKET_ITEMS[id];
+			expect(item.kind).toBe("sell");
+			expect(item.price).toBe(FISH[id].value);
+			expect(item.quantity).toBe(1);
+		}
+	});
+
+	it("offers every rod as a one-off purchase, capped at 10,000", () => {
+		expect(MARKET_CATEGORIES.rods.items).toEqual([...ROD_ORDER]);
+		for (const id of ROD_ORDER) {
+			const item = MARKET_ITEMS[id];
+			expect(item.kind).toBe("buy");
+			expect(item.price).toBe(RODS[id].cost);
+			expect(item.quantity).toBe(1);
+		}
+		expect(MARKET_ITEMS.master.price).toBe(10_000);
 	});
 
 	it("clamps sell quantities into the 1..max range", () => {

@@ -12,7 +12,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Playwright's `--with-deps` occasionally stalls on apt; the job itself
+    # normally finishes in ~5 min, so allow headroom for a slow install.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 

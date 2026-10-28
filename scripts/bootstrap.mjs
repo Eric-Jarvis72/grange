@@ -85,8 +85,26 @@ function installElixirDeps() {
 		return true;
 	}
 
+	// run-mix.mjs falls back to `mise x`, and mise installs missing toolchains
+	// itself, so only a machine with neither mix nor mise is fatal here.
+	if (!onPath("mix") && !onPath("mise")) {
+		console.error(
+			"Could not find Elixir. Install mise (https://mise.jdx.dev/), " +
+				"run `mise install`, and retry.",
+		);
+		return false;
+	}
+
 	console.log("Installing Elixir dependencies...");
 	const script = join(root, "scripts", "run-mix.mjs");
+
+	// A freshly installed Elixir has no Hex, and `mix deps.get` would stop to
+	// ask whether to install it. `--if-missing` makes this a no-op once Hex is
+	// present; if it fails anyway, deps.get reports the real problem.
+	if (!run("node", [script, "local.hex", "--force", "--if-missing"])) {
+		console.warn("Could not confirm Hex is installed; trying `mix deps.get` anyway.");
+	}
+
 	if (!run("node", [script, "deps.get"])) return false;
 
 	stamp(ELIXIR_STAMP, [ELIXIR_LOCK]);
@@ -114,4 +132,7 @@ if (hookMode) {
 	process.exit(0);
 }
 
+console.error(
+	"Setup did not finish. Fix the error above, then run `pnpm dev` (or `pnpm setup`) again.",
+);
 process.exit(1);
