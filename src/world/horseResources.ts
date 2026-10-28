@@ -13,7 +13,7 @@ export interface HorseArt {
 }
 
 const horseImage = (file: string): ex.ImageSource =>
-	new ex.ImageSource(`/assets/horse/${file}.webp`, {
+	new ex.ImageSource(`/assets/horse/${file}.png`, {
 		filtering: ex.ImageFiltering.Pixel,
 	});
 
