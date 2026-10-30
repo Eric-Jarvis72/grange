@@ -6,6 +6,7 @@ import {
 	MARKET_CATEGORIES,
 	MARKET_ITEMS,
 	MARKETS,
+	maxSeedPurchase,
 } from "./marketData";
 
 describe("market definitions", () => {
@@ -99,5 +100,27 @@ describe("market definitions", () => {
 		expect(clampQuantity(99, 10)).toBe(10);
 		expect(clampQuantity(3, 0)).toBe(1);
 		expect(clampQuantity(Number.NaN, 10)).toBe(1);
+	});
+});
+
+describe("maxSeedPurchase", () => {
+	it("caps a bulk buy by what the balance affords", () => {
+		// 100 grangecoin at $8 a seed buys 12, not 13.
+		expect(maxSeedPurchase(8, 100, 10)).toBe(12);
+	});
+
+	it("caps a bulk buy by the remaining room in the stack", () => {
+		// Room for 4 more seeds even though the balance could afford more.
+		expect(maxSeedPurchase(1, 100, 95)).toBe(4);
+	});
+
+	it("returns 0 when a single seed is out of reach", () => {
+		expect(maxSeedPurchase(8, 7, 0)).toBe(0);
+		expect(maxSeedPurchase(8, 0, 0)).toBe(0);
+	});
+
+	it("ignores a non-positive price", () => {
+		expect(maxSeedPurchase(0, 100, 0)).toBe(0);
+		expect(maxSeedPurchase(-2, 100, 0)).toBe(0);
 	});
 });

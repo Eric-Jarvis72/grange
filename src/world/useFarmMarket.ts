@@ -7,7 +7,12 @@ import { economy } from "./EconomyManager";
 import { type FishId, isFishId, isRodId, RODS } from "./fishingData";
 import { useFishingStore } from "./fishingStore";
 import type { MarketItemControl } from "./MarketWindow";
-import { MARKET_ITEMS, type MarketId, type MarketItemId } from "./marketData";
+import {
+	MARKET_ITEMS,
+	type MarketId,
+	type MarketItemId,
+	maxSeedPurchase,
+} from "./marketData";
 import { useEconomyBalance } from "./useEconomy";
 
 /** Market seed id -> the inventory item it grants. */
@@ -46,15 +51,16 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 		setMarketMessage(null);
 	}
 
-	async function buySeed(id: MarketItemId) {
+	async function buySeed(id: MarketItemId, quantity: number) {
 		const item = MARKET_ITEMS[id];
+		const count = Math.max(1, Math.floor(quantity));
 		if (!SEED_ITEMS[id]) return;
 		try {
 			const res = await fetch("/api/inventory/buy", {
 				method: "POST",
 				credentials: "same-origin",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ item: id, quantity: item.quantity }),
+				body: JSON.stringify({ item: id, quantity: count }),
 			});
 			const data = (await res.json()) as {
 				ok: boolean;
@@ -69,7 +75,7 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 			if (typeof data.balance === "number") economy.setBalance(data.balance);
 			if (data.seeds) useInventoryStore.getState().hydrateSeeds(data.seeds);
 			setMarketMessage(
-				`Bought ${item.quantity} ${item.name} for $${item.price * item.quantity}.`,
+				`Bought ${count} ${item.name} for $${item.price * count}.`,
 			);
 		} catch {
 			setMarketMessage("Could not reach the market.");
@@ -151,13 +157,16 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 				];
 			}
 			if (item.kind === "buy") {
+				const owned = seedOwned[item.id] ?? 0;
+				const max = maxSeedPurchase(item.price, balance, owned);
 				return [
 					item.id,
 					{
-						owned: seedOwned[item.id] ?? 0,
-						disabled: balance < item.price * item.quantity,
+						owned,
+						disabled: max < 1,
 						actionLabel: "Buy",
-						onAction: () => buySeed(item.id),
+						maxQuantity: max,
+						onAction: (quantity: number) => buySeed(item.id, quantity),
 					},
 				];
 			}

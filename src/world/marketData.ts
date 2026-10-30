@@ -207,3 +207,22 @@ export function clampQuantity(value: number, max: number): number {
 	if (!Number.isFinite(value)) return 1;
 	return Math.min(Math.max(1, Math.floor(value)), upper);
 }
+
+/** The server caps every seed stack at this many seeds. */
+export const MAX_SEED_STACK = 99;
+
+/**
+ * The most seeds a buyer can purchase in one order. Limited by what their
+ * balance affords and the remaining room in the seed stack; returns 0 when
+ * even a single seed is out of reach.
+ */
+export function maxSeedPurchase(
+	price: number,
+	balance: number,
+	owned: number,
+): number {
+	if (!Number.isFinite(price) || price <= 0) return 0;
+	const affordable = Math.floor(Math.max(0, balance) / price);
+	const room = Math.max(0, MAX_SEED_STACK - Math.max(0, Math.floor(owned)));
+	return Math.max(0, Math.min(affordable, room));
+}
