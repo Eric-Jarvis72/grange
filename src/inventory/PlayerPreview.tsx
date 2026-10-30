@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { economy } from "../world/EconomyManager";
+import {
+	FARMER_FRAME_COUNT,
+	FARMER_IDLE_FRAME,
+	FARMER_SPRITE_URL,
+} from "../world/farmerSprite";
 import { getItemDef } from "./items";
 import { useInventoryStore } from "./inventoryStore";
 import { SlotIcon } from "./SlotIcon";
 
 /**
- * 2D stand-in for the wireframe's "3D preview": a pixel-style paper-doll
- * (player color block from FarmMapScene) plus the currently equipped hotbar
- * item and the Grangecoin wallet balance.
+ * 2D visual preview of the player model: the farmer's idle sprite frame, the
+ * currently equipped hotbar item, and the Grangecoin wallet balance. Rendering
+ * the real model here (rather than a color block) is the hook cosmetic changes
+ * will hang off of.
  */
 export function PlayerPreview() {
 	const hotbar = useInventoryStore((s) => s.hotbar);
@@ -22,7 +28,21 @@ export function PlayerPreview() {
 		<section aria-label="Player preview" className="inv-preview">
 			<h3 className="inv-preview-title">Farmer</h3>
 			<div className="inv-paperdoll" aria-hidden="true">
-				<div className="inv-paperdoll-body" />
+				<div
+					className="inv-player-model"
+					data-testid="player-model"
+					style={{
+						backgroundImage: `url("${FARMER_SPRITE_URL}")`,
+						// The sheet is one row of frames; zoom so a single frame fills
+						// the element and pan to the idle frame.
+						backgroundSize: `${FARMER_FRAME_COUNT * 100}% 100%`,
+						backgroundPosition: `${
+							FARMER_FRAME_COUNT > 1
+								? (FARMER_IDLE_FRAME / (FARMER_FRAME_COUNT - 1)) * 100
+								: 0
+						}% 0`,
+					}}
+				/>
 				{equippedDef && (
 					<div className="inv-paperdoll-gear">
 						<SlotIcon itemId={equipped.itemId} />

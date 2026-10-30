@@ -51,6 +51,7 @@ test("number keys select hotbar slots and I toggles inventory", async ({
 	const panel = page.getByTestId("inventory-panel");
 	await expect(panel).toBeVisible();
 	await expect(page.getByTestId("inventory-grid")).toBeVisible();
+	await expect(page.getByTestId("player-model")).toBeVisible();
 	await expect(page.getByTestId("preview-equipped")).toContainText(
 		"Watering Can",
 	);

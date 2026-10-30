@@ -339,13 +339,12 @@ button.hud-prompt:focus-visible {
 		#17110a;
 }
 
-.inv-paperdoll-body {
-	width: 2rem;
-	height: 2rem;
-	background: #ffcc00;
-	border: 2px solid rgba(0, 0, 0, 0.5);
-	box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+.inv-player-model {
+	width: 6rem;
+	height: 6rem;
+	background-repeat: no-repeat;
 	image-rendering: pixelated;
+	filter: drop-shadow(0 6px 5px rgba(0, 0, 0, 0.45));
 }
 
 .inv-paperdoll-gear {
