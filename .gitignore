@@ -5,6 +5,10 @@ dist
 test-results
 playwright-report
 
+# Python bytecode caches (asset/tooling scripts)
+__pycache__/
+*.pyc
+
 # Local auth/session config. .env.example is the committed template.
 .env
 .env.local
