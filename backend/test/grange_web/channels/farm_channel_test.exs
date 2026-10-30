@@ -47,6 +47,21 @@ defmodule GrangeWeb.FarmChannelTest do
     ref = push(socket, "farmAction", %{"action" => %{"kind" => "harvest", "x" => 0, "y" => 0}})
     assert_reply(ref, :error, reply)
     assert reply.error == "no tilled tile here"
+    assert reply.seeds["seed-bag"] == 10
+  end
+
+  test "action replies carry the remaining seed count" do
+    FarmStore.ensure("Alice")
+
+    {:ok, _reply, socket} =
+      signed_socket("Alice") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
+
+    ref = push(socket, "farmAction", %{"action" => %{"kind" => "till", "x" => 1, "y" => 1}})
+    assert_reply(ref, :ok)
+
+    ref = push(socket, "farmAction", %{"action" => %{"kind" => "plant", "x" => 1, "y" => 1}})
+    assert_reply(ref, :ok, reply)
+    assert reply.seeds["seed-bag"] == 9
   end
 
   test "a visitor joins read-only and cannot act" do

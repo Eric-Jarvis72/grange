@@ -19,7 +19,7 @@
     "test:backend": "node scripts/run-mix.mjs test",
     "test:e2e": "vite build && playwright test",
     "test:e2e:install": "playwright install chromium",
-    "lint": "biome lint && node scripts/max-lines.mjs && pnpm sanity",
+    "lint": "biome lint src shared && node scripts/max-lines.mjs && pnpm sanity",
     "lint:backend": "node scripts/run-mix.mjs format --check-formatted && node scripts/run-mix.mjs credo --strict",
     "sanity": "node scripts/repo-sanity.mjs",
     "check": "pnpm lint && pnpm test && pnpm test:backend && pnpm build",

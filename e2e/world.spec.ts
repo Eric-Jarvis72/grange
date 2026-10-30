@@ -125,6 +125,10 @@ test("the seed market opens a window with a seeds tab", async ({ page }) => {
 	await page.keyboard.press("Escape");
 	await expect(market).toHaveCount(0);
 	await expect(prompt).toContainText("enter the seed market");
+
+	// The purchase is account state, not a local bump that resets to 10 on load.
+	await page.reload();
+	await expect(page.getByTestId("slot-hotbar-1")).toHaveAttribute("data-count", "11");
 });
 
 test("the produce market opens sell, tools, and train tabs", async ({

@@ -33,6 +33,12 @@ export interface FarmAck extends Ack {
 	farm?: ActiveFarm;
 }
 
+/** Reply to a successful farm action, carrying authoritative seed state. */
+export interface FarmActionAck extends Ack {
+	seeds?: Record<string, number>;
+	drops?: string[];
+}
+
 /** The lobby channel is shared by the whole app; the farm channel tracks visits. */
 let lobby: Channel | null = null;
 let farmChannel: Channel | null = null;
@@ -56,7 +62,8 @@ function reasonOf(payload: unknown): string | undefined {
 function applyServerItems(items: Record<string, number> | undefined): void {
 	if (!items) return;
 	reconcileServerItems(items, {
-		addItem: (itemId, count) => useInventoryStore.getState().addItem(itemId, count),
+		addItem: (itemId, count) =>
+			useInventoryStore.getState().addItem(itemId, count),
 		countItem: (itemId) => countItem(useInventoryStore.getState(), itemId),
 	});
 }
@@ -166,7 +173,7 @@ export function emitLeaveFarm(cb?: (res: Ack) => void): void {
 export function emitFarmAction(
 	owner: string,
 	action: FarmAction,
-	cb?: (res: Ack) => void,
+	cb?: (res: FarmActionAck) => void,
 ): void {
 	const channel = farmChannel;
 	if (!channel || farmOwner !== owner) {
@@ -176,10 +183,22 @@ export function emitFarmAction(
 
 	channel
 		.push("farmAction", { action })
-		.receive("ok", () => cb?.({ ok: true }))
-		.receive("error", (payload: unknown) =>
-			cb?.({ ok: false, error: reasonOf(payload) ?? "Invalid action" }),
-		)
+		.receive("ok", (payload: unknown) => {
+			const data = (payload ?? {}) as {
+				seeds?: Record<string, number>;
+				drops?: string[];
+			};
+			cb?.({ ok: true, ...data });
+		})
+		.receive("error", (payload: unknown) => {
+			const seeds = (payload as { seeds?: Record<string, number> } | null)
+				?.seeds;
+			cb?.({
+				ok: false,
+				error: reasonOf(payload) ?? "Invalid action",
+				seeds,
+			});
+		})
 		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
 }
 

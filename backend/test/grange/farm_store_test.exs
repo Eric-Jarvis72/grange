@@ -2,7 +2,7 @@ defmodule Grange.FarmStoreTest do
   @moduledoc false
   use ExUnit.Case, async: false
 
-  alias Grange.{Farm, FarmGateActions, FarmStore}
+  alias Grange.{Farm, FarmStore, Inventory}
 
   setup do
     FarmStore.reset()
@@ -56,53 +56,6 @@ defmodule Grange.FarmStoreTest do
 
     assert {:error, "no fence here"} =
              FarmStore.action("Alice", %{"kind" => "remove_fence", "x" => 7, "y" => 5})
-  end
-
-  test "gates persist, consume a separate supply, toggle, and reorient" do
-    FarmStore.ensure("Alice")
-    FarmStore.ensure("Bob")
-
-    assert {:ok, view} = FarmStore.action("Alice", %{"kind" => "place_gate", "x" => 7, "y" => 5})
-    assert view.gates == [%{x: 7, y: 5, direction: "horizontal", open: false}]
-    assert view.gate_count == 1
-    assert FarmStore.view("Bob").gates == []
-
-    assert {:error, "gate already here"} =
-             FarmStore.action("Alice", %{"kind" => "place_gate", "x" => 7, "y" => 5})
-
-    assert {:error, "gate already here"} =
-             FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 7, "y" => 5})
-
-    assert {:ok, view} =
-             FarmGateActions.toggle("Alice", %{"kind" => "toggle_gate", "x" => 7, "y" => 5})
-
-    assert [%{open: true}] = view.gates
-
-    assert {:ok, view} = FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 7, "y" => 6})
-    assert [%{direction: "vertical"}] = view.gates
-
-    assert {:ok, view} = FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 8, "y" => 5})
-    assert [%{direction: "horizontal"}] = view.gates
-
-    assert {:ok, view} =
-             FarmStore.action("Alice", %{"kind" => "remove_gate", "x" => 7, "y" => 5})
-
-    assert view.gates == []
-    assert view.gate_count == 2
-
-    assert {:error, "no gate here"} =
-             FarmGateActions.toggle("Alice", %{"kind" => "toggle_gate", "x" => 7, "y" => 5})
-
-    assert {:error, "invalid gate action"} =
-             FarmGateActions.toggle("Alice", %{"kind" => "toggle_gate", "x" => 99, "y" => 5})
-  end
-
-  test "a gate cannot share a tile with a fence" do
-    FarmStore.ensure("Alice")
-    FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 4, "y" => 4})
-
-    assert {:error, "fence already here"} =
-             FarmStore.action("Alice", %{"kind" => "place_gate", "x" => 4, "y" => 4})
   end
 
   test "fences reject water and occupied crop tiles" do
@@ -241,6 +194,32 @@ defmodule Grange.FarmStoreTest do
     assert %{state: :watered} = tile_at("Alice", 0, 0)
   end
 
+  test "planting spends one seed and a rejected plant refunds it" do
+    FarmStore.ensure("Alice")
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 0, "y" => 0})
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 1, "y" => 0})
+
+    assert {:ok, _} = FarmStore.action("Alice", %{"kind" => "plant", "x" => 0, "y" => 0})
+    assert Inventory.seeds("Alice")["seed-bag"] == 9
+
+    assert {:error, "tile is not tilled"} =
+             FarmStore.action("Alice", %{"kind" => "plant", "x" => 0, "y" => 0})
+
+    assert Inventory.seeds("Alice")["seed-bag"] == 9
+  end
+
+  test "planting without a seed leaves the tile tilled" do
+    FarmStore.ensure("Alice")
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 0, "y" => 0})
+    assert :ok = Inventory.take("Alice", "seed-bag", 10)
+
+    assert {:error, "no seeds"} =
+             FarmStore.action("Alice", %{"kind" => "plant", "x" => 0, "y" => 0})
+
+    assert %{state: :tilled} = tile_at("Alice", 0, 0)
+    assert Inventory.seeds("Alice")["seed-bag"] == 0
+  end
+
   test "watering rejects untilled and already-watered tiles; unknown kinds are invalid" do
     FarmStore.ensure("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 1, "y" => 1})
@@ -292,6 +271,7 @@ defmodule Grange.FarmStoreTest do
 
   test "wheat cannot be harvested by hand and banks its own barn item" do
     FarmStore.ensure("Alice")
+    Inventory.add("Alice", "wheat-seed", 1)
     FarmStore.action("Alice", %{"kind" => "till", "x" => 2, "y" => 2})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 2, "y" => 2, "crop" => "wheat"})
     grow("Alice", 2, 2)

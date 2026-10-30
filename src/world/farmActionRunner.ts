@@ -1,7 +1,12 @@
 import type { CropId } from "../../shared/crops";
 import { countItem, useInventoryStore } from "../inventory/inventoryStore";
-import { cropForSeedItem, farmToolForItem, type ItemId } from "../inventory/items";
-import { emitFarmAction } from "../socket";
+import {
+	cropForSeedItem,
+	farmToolForItem,
+	ITEMS,
+	type ItemId,
+} from "../inventory/items";
+import { emitFarmAction, type FarmActionAck } from "../socket";
 import { useGameStore } from "../store";
 import type { ComboController } from "./farmCombo";
 import { type ActionPlan, maybeSpread, resolveAction } from "./farmActions";
@@ -45,15 +50,27 @@ export function performFarmAction(
 	}
 
 	const plan = resolution.plan;
-	let crop: CropId | undefined;
-	if (plan.kind === "plant") {
-		const seed = consumeSeedItem();
-		if (!seed) {
-			feedback.message("Out of seeds — buy more at the market.");
+	const crop =
+		plan.kind === "plant" ? (seedCropInHand() ?? undefined) : undefined;
+	if (plan.kind === "plant" && !crop) {
+		feedback.message("Out of seeds — buy more at the market.");
+		return;
+	}
+
+	// The server is authoritative: it spends the seed and answers with the
+	// remaining counts. Until that ack arrives the client does not mutate its
+	// own inventory, so a rejected action cannot silently eat a seed.
+	const onAck = (res: FarmActionAck) => {
+		if (res.seeds) useInventoryStore.getState().hydrateSeeds(res.seeds);
+		if (!res.ok) {
+			feedback.message(res.error ?? "Action failed.");
 			return;
 		}
-		crop = seed;
-	}
+		for (const drop of res.drops ?? []) {
+			const name = ITEMS[drop as ItemId]?.name ?? drop;
+			feedback.message(`Rare ${name}!`);
+		}
+	};
 
 	combo.register(plan.kind, tile);
 	if (plan.tool === "scythe") {
@@ -62,16 +79,20 @@ export function performFarmAction(
 			row * TILE_SIZE + TILE_SIZE - 14,
 		);
 	}
-	spread(owner, combo, column, row, plan);
+	spread(owner, combo, column, row, plan, onAck);
 
-	emitFarmAction(owner, {
-		kind: plan.kind,
-		x: column,
-		y: row,
-		crop,
-		tool: plan.tool,
-		comboMutationMultiplier: combo.mutationMultiplier,
-	});
+	emitFarmAction(
+		owner,
+		{
+			kind: plan.kind,
+			x: column,
+			y: row,
+			crop,
+			tool: plan.tool,
+			comboMutationMultiplier: combo.mutationMultiplier,
+		},
+		onAck,
+	);
 }
 
 /** High combos occasionally auto-apply a water or scythe to one neighbour. */
@@ -81,22 +102,34 @@ function spread(
 	column: number,
 	row: number,
 	plan: ActionPlan,
+	onAck: (res: FarmActionAck) => void,
 ): void {
 	if (plan.kind !== "water" && plan.tool !== "scythe") return;
 	const farm = useGameStore.getState().activeFarm;
 	const kind = plan.kind === "water" ? "water" : "harvest";
 	const multiplier = combo.mutationMultiplier;
-	maybeSpread(combo.current, farm?.tiles ?? [], column, row, kind, plan.tool, (x, y, tool) =>
-		emitFarmAction(owner, { kind, x, y, tool, comboMutationMultiplier: multiplier }),
+	maybeSpread(
+		combo.current,
+		farm?.tiles ?? [],
+		column,
+		row,
+		kind,
+		plan.tool,
+		(x, y, tool) =>
+			emitFarmAction(
+				owner,
+				{ kind, x, y, tool, comboMutationMultiplier: multiplier },
+				onAck,
+			),
 	);
 }
 
-/** Spends one selected seed and returns the crop it plants, if any. */
-function consumeSeedItem(): CropId | null {
+/** The crop whose seed is selected and still held, if any. */
+function seedCropInHand(): CropId | null {
 	const inventory = useInventoryStore.getState();
-	const itemId = inventory.hotbar[inventory.selectedHotbar]?.itemId ?? undefined;
+	const itemId =
+		inventory.hotbar[inventory.selectedHotbar]?.itemId ?? undefined;
 	const crop = cropForSeedItem(itemId);
 	if (!crop || !itemId || countItem(inventory, itemId) < 1) return null;
-	inventory.removeItem(itemId as ItemId, 1);
 	return crop;
 }

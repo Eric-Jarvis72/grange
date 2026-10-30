@@ -20,6 +20,7 @@ defmodule Grange.FarmStore do
     Crops,
     Farm,
     FarmAction,
+    FarmBootstrap,
     FarmFence,
     FarmFences,
     FarmGate,
@@ -27,6 +28,10 @@ defmodule Grange.FarmStore do
     FarmProp,
     FarmProps,
     FarmRecord,
+    FarmView,
+    Inventory,
+    InventoryItem,
+    InventorySlot,
     PlayerItem,
     Repo,
     Tile
@@ -38,15 +43,12 @@ defmodule Grange.FarmStore do
 
   @spec ensure(String.t()) :: map()
   def ensure(owner) do
-    case Repo.get(FarmRecord, owner) do
-      nil ->
-        %FarmRecord{owner: owner, tomatoes: 0} |> Repo.insert!()
-        broadcast_change(owner)
-
-      _farm ->
-        :ok
+    case FarmBootstrap.ensure(owner) do
+      :created -> broadcast_change(owner)
+      :existing -> :ok
     end
 
+    Inventory.ensure(owner)
     view(owner)
   end
 
@@ -64,7 +66,7 @@ defmodule Grange.FarmStore do
 
         %{
           owner: owner,
-          tiles: tiles(owner),
+          tiles: FarmView.tiles(owner),
           barn: barn,
           tomatoes: Map.get(barn, "tomato", 0),
           fences: FarmFences.list(owner),
@@ -80,7 +82,7 @@ defmodule Grange.FarmStore do
   @spec summaries() :: [map()]
   def summaries do
     Repo.all(from(f in FarmRecord, preload: [:tiles, :barn_items], order_by: f.owner))
-    |> Enum.map(&summary/1)
+    |> Enum.map(&FarmView.summary/1)
   end
 
   @spec action(String.t(), map()) :: {:ok, map()} | {:error, String.t()}
@@ -129,7 +131,17 @@ defmodule Grange.FarmStore do
   @spec reset() :: :ok
   def reset do
     # Child tables first so foreign keys are satisfied, then the farms.
-    [Tile, BarnItem, PlayerItem, FarmFence, FarmGate, FarmProp, FarmRecord]
+    [
+      Tile,
+      BarnItem,
+      PlayerItem,
+      InventoryItem,
+      InventorySlot,
+      FarmFence,
+      FarmGate,
+      FarmProp,
+      FarmRecord
+    ]
     |> Enum.each(&Repo.delete_all/1)
 
     :ok
@@ -149,19 +161,26 @@ defmodule Grange.FarmStore do
   end
 
   defp apply_action(owner, kind, x, y, opts) do
-    case Repo.transaction(fn -> mutate(owner, kind, x, y, opts) end) do
+    case Repo.transaction(fn -> mutate_or_rollback(owner, kind, x, y, opts) end) do
       {:ok, {:drops, drops}} ->
         broadcast_change(owner)
         {:ok, Map.put(view(owner), :drops, drops)}
 
-      {:ok, {:error, reason}} ->
-        {:error, reason}
-
       {:ok, :ok} ->
         refresh(owner)
 
+      {:error, reason} when is_binary(reason) ->
+        {:error, reason}
+
       {:error, _reason} ->
         {:error, "could not update farm"}
+    end
+  end
+
+  defp mutate_or_rollback(owner, kind, x, y, opts) do
+    case mutate(owner, kind, x, y, opts) do
+      {:error, reason} -> Repo.rollback(reason)
+      result -> result
     end
   end
 
@@ -201,11 +220,13 @@ defmodule Grange.FarmStore do
   defp reorient_gates(owner, :ok), do: FarmGates.reorient(owner)
   defp reorient_gates(_owner, error), do: error
 
-  defp transform(_owner, tile, :plant, opts) do
+  defp transform(owner, tile, :plant, opts) do
     crop = opts[:crop] || "tomato"
     total = Crops.get(crop)[:harvests] || 1
+    seed = Inventory.seed_item(crop)
 
-    with {:ok, planted} <- Farm.plant(tile, now_ms()) do
+    with :ok <- Inventory.take(owner, seed, 1),
+         {:ok, planted} <- Farm.plant(tile, now_ms()) do
       update_tile(tile, %{planted | crop: Crops.encode_crop(crop, total)})
     end
   end
@@ -230,6 +251,7 @@ defmodule Grange.FarmStore do
         Barn.add(owner, crop_id, 1)
         families = neighbor_families(owner, tile.x, tile.y)
         drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
+        Enum.each(drops, &Inventory.add(owner, &1, 1))
         regrow_or_clear(owner, tile, crop_id, remaining)
         {:drops, drops}
 
@@ -326,38 +348,6 @@ defmodule Grange.FarmStore do
 
   defp tile_at(owner, x, y) do
     Repo.one(from(t in Tile, where: t.owner == ^owner and t.x == ^x and t.y == ^y))
-  end
-
-  defp tiles(owner) do
-    from(t in Tile, where: t.owner == ^owner, order_by: [t.x, t.y])
-    |> Repo.all()
-    |> Enum.map(&tile_view/1)
-  end
-
-  defp tile_view(tile) do
-    %{
-      x: tile.x,
-      y: tile.y,
-      state: tile.state,
-      crop: tile.crop,
-      planted_at: tile.planted_at,
-      watered_at: tile.watered_at,
-      ready_at: tile.ready_at
-    }
-  end
-
-  defp summary(farm) do
-    counts = Enum.frequencies_by(farm.tiles, & &1.state)
-    tomatoes = Enum.find_value(farm.barn_items, 0, &if(&1.item == "tomato", do: &1.count))
-
-    %{
-      owner: farm.owner,
-      tiles: length(farm.tiles),
-      planted: Map.get(counts, :planted, 0),
-      watered: Map.get(counts, :watered, 0),
-      ready: Map.get(counts, :ready, 0),
-      tomatoes: tomatoes
-    }
   end
 
   defp broadcast_change(owner) do
