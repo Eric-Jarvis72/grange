@@ -4,6 +4,23 @@ export const MAP_ROWS = 12;
 export const MAP_WIDTH = MAP_COLUMNS * TILE_SIZE;
 export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;
 
+/** Each purchase adds a two-tile band outside the original farm. */
+export const LAND_PRICES = [250, 500, 1000, 2000] as const;
+export function farmBounds(level: number) {
+	return {
+		minColumn: level >= 2 ? -2 : 0,
+		maxColumn: level >= 3 ? 19 : 17,
+		minRow: level >= 4 ? -4 : level >= 1 ? -2 : 0,
+		maxRow: 11,
+	};
+}
+export function ownsFarmTile(column: number, row: number, level: number): boolean {
+	const bounds = farmBounds(level);
+	return Number.isInteger(column) && Number.isInteger(row) &&
+		column >= bounds.minColumn && column <= bounds.maxColumn &&
+		row >= bounds.minRow && row <= 9;
+}
+
 export type TerrainKey =
 	| "grass"
 	| "grass-tufts"
@@ -125,9 +142,6 @@ export function isNearFarmTrain(x: number, y: number): boolean {
 export function terrainAt(column: number, row: number): TerrainKey {
 	if (row === 11) return "water";
 	if (row === 10) return "shore-north";
-	if (column === 4 && row === 4) return "path-cross";
-	if (row === 4) return "path-horizontal";
-	if (column === 4 && row < 10) return "path-vertical";
 	if ((column * 7 + row * 5) % 19 === 0) return "grass-flowers";
 	if ((column * 3 + row * 11) % 8 === 0) return "grass-tufts";
 	return "grass";

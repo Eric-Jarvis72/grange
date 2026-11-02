@@ -1,5 +1,5 @@
 import type { FenceGate, GateDirection } from "../../shared/types";
-import { MAP_COLUMNS, MAP_ROWS, TILE_SIZE } from "./mapData";
+import { TILE_SIZE } from "./mapData";
 import type { TileCoord } from "./blocking";
 import type { WalkObstacle } from "./walkCollisions";
 
@@ -13,7 +13,7 @@ export const edgeKey = (edge: FenceEdge) =>
 	`${fenceKey(edge.from.x, edge.from.y)}|${fenceKey(edge.to.x, edge.to.y)}`;
 
 export const fenceInBounds = (x: number, y: number) =>
-	Number.isInteger(x) && Number.isInteger(y) && x >= 0 && x < MAP_COLUMNS && y >= 0 && y < MAP_ROWS - 2;
+	Number.isInteger(x) && Number.isInteger(y) && x >= -2 && x <= 19 && y >= -4 && y <= 9;
 
 /** One post at the center of each 64px ground tile; connections are derived. */
 export function buildFenceGraph(coords: FenceCoord[]): { nodes: FenceNode[]; edges: FenceEdge[] } {

@@ -2,7 +2,7 @@ defmodule GrangeWeb.FarmChannelTest do
   @moduledoc false
   use GrangeWeb.ChannelCase
 
-  alias Grange.{Accounts, Farm, FarmStore}
+  alias Grange.{Accounts, Farm, FarmRecord, FarmStore, Repo}
   alias GrangeWeb.ChannelCase, as: Helper
 
   setup do
@@ -11,13 +11,23 @@ defmodule GrangeWeb.FarmChannelTest do
     :ok
   end
 
+  defp full_farm(owner) do
+    FarmStore.ensure(owner)
+
+    Repo.get!(FarmRecord, owner)
+    |> Ecto.Changeset.change(land_level: 4)
+    |> Repo.update!()
+
+    FarmStore.view(owner)
+  end
+
   defp signed_socket(username) do
     user = Helper.register_user(username)
     socket(GrangeWeb.UserSocket, user.id, %{user: user})
   end
 
   test "joining a farm replies with the farm" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     assert {:ok, reply, _socket} =
              signed_socket("Alice")
@@ -28,7 +38,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "the owner can till and the change is broadcast" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     {:ok, _reply, socket} =
       signed_socket("Alice") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
@@ -39,7 +49,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "an illegal action is rejected" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     {:ok, _reply, socket} =
       signed_socket("Alice") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
@@ -65,7 +75,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "a visitor joins read-only and cannot act" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     {:ok, _reply, socket} =
       signed_socket("Bob") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
@@ -76,7 +86,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "a visitor can toggle a gate but cannot place one" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
     FarmStore.action("Alice", %{"kind" => "place_gate", "x" => 7, "y" => 5})
 
     {:ok, _reply, socket} =
@@ -98,7 +108,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "the owner can sell produce and the change is broadcast" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
     FarmStore.action("Alice", %{"kind" => "till", "x" => 1, "y" => 1})
     FarmStore.action("Alice", %{"kind" => "plant", "x" => 1, "y" => 1})
     FarmStore.action("Alice", %{"kind" => "water", "x" => 1, "y" => 1})
@@ -116,7 +126,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "a visitor cannot sell produce" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     {:ok, _reply, socket} =
       signed_socket("Bob") |> subscribe_and_join(GrangeWeb.FarmChannel, "farm:Alice")
@@ -127,7 +137,7 @@ defmodule GrangeWeb.FarmChannelTest do
   end
 
   test "a signed-out socket cannot act" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
 
     {:ok, _reply, socket} =
       socket(GrangeWeb.UserSocket)

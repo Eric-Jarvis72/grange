@@ -4,6 +4,10 @@ import { FARM_TRAIN_ARRIVAL_SPAWN } from "./mapData";
 import type { MarketId } from "./marketData";
 import {
 	MARKETPLACE_CASINO_ENTRANCE,
+	MARKETPLACE_LIVESTOCK_ENTRANCE,
+	MARKETPLACE_BANK_ENTRANCE,
+	MARKETPLACE_COLUMNS,
+	MARKETPLACE_WIDTH,
 	MARKETPLACE_PLAYER_SPAWN,
 	MARKETPLACE_PRODUCE_MARKET_ENTRANCE,
 	MARKETPLACE_SEED_MARKET_ENTRANCE,
@@ -33,6 +37,7 @@ export class MarketplaceScene extends WalkingScene {
 			area: "Marketplace",
 			spawn: ex.vec(MARKETPLACE_PLAYER_SPAWN.x, MARKETPLACE_PLAYER_SPAWN.y),
 			obstacles: marketplaceWalkObstacles,
+			worldWidth: MARKETPLACE_WIDTH,
 			interactions: [
 				{
 					position: ex.vec(MARKETPLACE_TRAIN_STOP.x, MARKETPLACE_TRAIN_STOP.y),
@@ -45,6 +50,21 @@ export class MarketplaceScene extends WalkingScene {
 					canInteract: () => this.train?.canBoard() ?? false,
 					trainArriving: true,
 					onTravel: () => this.departTrain(),
+				},
+				{
+					position: ex.vec(MARKETPLACE_BANK_ENTRANCE.x, MARKETPLACE_BANK_ENTRANCE.y),
+					destination: "bank",
+					prompt: "Press E or Enter to enter the bank",
+					radius: 72,
+				},
+				{
+					position: ex.vec(
+						MARKETPLACE_LIVESTOCK_ENTRANCE.x,
+						MARKETPLACE_LIVESTOCK_ENTRANCE.y,
+					),
+					destination: "livestock-market",
+					prompt: "Press E or Enter to enter the livestock market",
+					radius: 72,
 				},
 				{
 					position: ex.vec(
@@ -81,7 +101,7 @@ export class MarketplaceScene extends WalkingScene {
 
 	override onInitialize(): void {
 		this.backgroundColor = ex.Color.fromHex("#79a44d");
-		addTerrain(this, marketplaceTerrainAt);
+		addTerrain(this, marketplaceTerrainAt, MARKETPLACE_COLUMNS);
 		addProps(this, marketplaceProps, marketplaceImages);
 		this.train = new TrainController(findTrainRest(marketplaceProps), this);
 		this.addPlayer();

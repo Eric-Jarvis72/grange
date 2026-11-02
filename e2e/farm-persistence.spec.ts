@@ -13,6 +13,7 @@ test("planted seed counts survive a page refresh", async ({ page }) => {
 
 	// Hoe and plant one tomato seed.
 	await clickFarmTile(page, 9, 7);
+	await expect(page.getByTestId("farm-map-tiles")).toHaveText("1 tiles");
 	await page.keyboard.press("2");
 	await clickFarmTile(page, 9, 7);
 	await expect(page.getByTestId("slot-hotbar-1")).toHaveAttribute(

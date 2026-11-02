@@ -18,6 +18,8 @@ export interface RenderedProp<Asset extends string> {
 export function addTerrain(
 	scene: ex.Scene,
 	terrainAt: (column: number, row: number) => TerrainKey,
+	columns = MAP_COLUMNS,
+	rows = MAP_ROWS,
 ): void {
 	const sheet = ex.SpriteSheet.fromImageSource({
 		image: terrainImage,
@@ -32,13 +34,13 @@ export function addTerrain(
 		pos: ex.vec(0, 0),
 		tileWidth: TILE_SIZE,
 		tileHeight: TILE_SIZE,
-		columns: MAP_COLUMNS,
-		rows: MAP_ROWS,
+		columns,
+		rows,
 		renderFromTopOfGraphic: true,
 	});
 
-	for (let row = 0; row < MAP_ROWS; row += 1) {
-		for (let column = 0; column < MAP_COLUMNS; column += 1) {
+	for (let row = 0; row < rows; row += 1) {
+		for (let column = 0; column < columns; column += 1) {
 			const frame = terrainFrames[terrainAt(column, row)];
 			terrain
 				.getTile(column, row)

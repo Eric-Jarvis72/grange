@@ -9,6 +9,7 @@ import {
 	type RodId,
 } from "../world/fishingData";
 import type { MovablePropKey } from "../world/mapData";
+import type { AnimalId } from "../world/livestockData";
 
 export type ItemId =
 	| "hoe"
@@ -29,11 +30,12 @@ export type ItemId =
 	| "fence"
 	| "gate"
 	| "shovel"
+	| AnimalId
 	| RodId
 	| FishId
 	| MovablePropKey;
 
-export type ItemKind = "tool" | "seed" | "crop" | "fish" | "building";
+export type ItemKind = "tool" | "seed" | "crop" | "fish" | "building" | "animal";
 
 export interface ItemDef {
 	id: ItemId;
@@ -214,6 +216,18 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 		icon: "/assets/farm/objects/shovel.svg",
 		description: "Click a fence or farm object to dig it up into inventory.",
 	},
+	cow: { id: "cow", name: "Cow", kind: "animal", maxStack: 99,
+		icon: "/assets/farm/animals/cow/idle-01.webp",
+		description: "A cow bought at the livestock market. Farm placement is coming later." },
+	hen: { id: "hen", name: "Hen", kind: "animal", maxStack: 99,
+		icon: "/assets/farm/animals/hen/idle-01.webp",
+		description: "A hen bought at the livestock market. Farm placement is coming later." },
+	sheep: { id: "sheep", name: "Sheep", kind: "animal", maxStack: 99,
+		icon: "/assets/farm/animals/sheep/idle-01.webp",
+		description: "A sheep bought at the livestock market. Farm placement is coming later." },
+	pig: { id: "pig", name: "Pig", kind: "animal", maxStack: 99,
+		icon: "/assets/farm/animals/pig/idle-01.webp",
+		description: "A pig bought at the livestock market. Farm placement is coming later." },
 	farmhouse: { id: "farmhouse", name: "Farmhouse", kind: "building", maxStack: 99,
 		icon: "/assets/farm/buildings/farmhouse.webp", description: "Place your farmhouse on clear ground." },
 	barn: { id: "barn", name: "Barn", kind: "building", maxStack: 99,

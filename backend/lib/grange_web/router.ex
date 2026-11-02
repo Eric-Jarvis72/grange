@@ -23,6 +23,10 @@ defmodule GrangeWeb.Router do
     get("/auth/me", AuthController, :me)
 
     post("/economy/transaction", EconomyController, :transaction)
+    post("/livestock/buy", LivestockController, :buy)
+    get("/bank/balance", BankController, :balance)
+    post("/bank/transfer", BankController, :transfer)
+    post("/land/buy", BankController, :buy_land)
 
     get("/inventory", InventoryController, :index)
     put("/inventory", InventoryController, :replace)

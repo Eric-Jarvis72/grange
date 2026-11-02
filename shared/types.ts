@@ -36,6 +36,9 @@ export interface ActiveFarm {
 	tomatoes: number;
 	/** Produce held per produce item id (crop id), e.g. `{ tomato: 3 }`. */
 	barn: Record<string, number>;
+	/** Livestock owned by this farm, keyed by animal species. */
+	animals: Record<string, number>;
+	land_level?: number;
 	fences: Array<{ x: number; y: number }>;
 	fence_count: number;
 	gates: FenceGate[];

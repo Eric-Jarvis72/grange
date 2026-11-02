@@ -4,7 +4,7 @@ import { emitFarmAction } from "../socket";
 import { useGameStore } from "../store";
 import type { BlockRegistry } from "./blocking";
 import { fenceInBounds, fenceKey } from "./fenceData";
-import { isTillableTile, TILE_SIZE } from "./mapData";
+import { isTillableTile, ownsFarmTile, TILE_SIZE } from "./mapData";
 
 export function selectedFarmItem() {
 	const inventory = useInventoryStore.getState();
@@ -15,6 +15,7 @@ export function fencePlacementReason(farm: ActiveFarm,
 	column: number, row: number, blocks: BlockRegistry,
 	player: { x: number; y: number }): string | null {
 	if (!fenceInBounds(column, row)) return "Keep fences on dry land.";
+	if (!ownsFarmTile(column, row, farm.land_level ?? 0)) return "Buy this land from the mayor first.";
 	if (farm.fence_count <= 0) return "No fences left in inventory.";
 	if (blocks.isBlocked(column, row) ||
 		(farm.fences ?? []).some(({ x, y }) => fenceKey(x, y) === fenceKey(column, row)) ||
@@ -41,6 +42,7 @@ export function actOnFence(owner: string, column: number, row: number,
 	}
 	if (item === "gate") {
 		if (!fenceInBounds(column, row) || !isTillableTile(column, row) ||
+			!ownsFarmTile(column, row, farm.land_level ?? 0) ||
 			blocks.isBlocked(column, row) || fenceHere || gateHere || farm.gate_count <= 0 ||
 			(column === Math.floor(player.x / TILE_SIZE) && row === Math.floor(player.y / TILE_SIZE)) ||
 			farm.tiles.some((tile) => tile.x === column && tile.y === row)) {

@@ -2,7 +2,7 @@ defmodule Grange.InventoryTest do
   @moduledoc false
   use ExUnit.Case, async: false
 
-  alias Grange.{Accounts, FarmStore, Inventory}
+  alias Grange.{Accounts, FarmStore, Inventory, LivestockMarket}
 
   setup do
     FarmStore.reset()
@@ -163,5 +163,16 @@ defmodule Grange.InventoryTest do
     ]
 
     assert {:error, "invalid inventory slot"} = Inventory.save_layout("Alice", overfull)
+  end
+
+  test "owned livestock can be saved in slots, but cannot be invented" do
+    assert {:ok, user} = register()
+    FarmStore.ensure(user.username)
+    pig = [%{"area" => "grid", "slot" => 0, "item" => "pig", "count" => 1}]
+
+    assert {:error, "animal count mismatch"} = Inventory.save_layout("Alice", pig)
+    assert {:ok, _} = LivestockMarket.buy(user.id, user.username, "pig")
+    assert {:ok, saved} = Inventory.save_layout("Alice", pig)
+    assert find_slot(saved, "grid", 0).item == "pig"
   end
 end

@@ -1,5 +1,5 @@
 import * as ex from "excalibur";
-import { type FarmToolId, isFarmInBounds } from "../../shared/farm";
+import type { FarmToolId } from "../../shared/farm";
 import { useGameStore } from "../store";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { farmToolForItem } from "../inventory/items";
@@ -16,25 +16,25 @@ import { FarmPropLayer } from "./farmPropLayer";
 import { FarmPlacementPreview } from "./FarmPlacementPreview";
 import { FarmTravel } from "./FarmTravel";
 import { FarmFishing } from "./farmFishing";
-import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
+import { updateFarmerGraphics } from "./farmerSprite";
+import { createFarmPlayer, followFarmPlayer } from "./farmSceneSetup";
 import { hoveredFarmTile, type FarmHoveredTile, type FarmHudSnapshot } from "./farmHud";
 import { TOOL_HINTS } from "./farmTools";
 import { FarmTileSync } from "./farmSceneTiles";
 import { nearbyGate, toggleGate } from "./gateInteraction";
 import { farmActionOnSpace } from "./farmSceneInput";
 import { InputManager } from "./InputManager";
+import { buildTerrain, paintFarmTerrain } from "./farmTerrain";
 import {
-	FARM_PLAYER_SPAWN,
-	MAP_COLUMNS,
 	MAP_HEIGHT,
-	MAP_ROWS,
 	MAP_WIDTH,
 	props,
 	isMovablePropAsset,
 	TILE_SIZE,
+	ownsFarmTile,
 } from "./mapData";
-import { buildTerrain } from "./farmTerrain";
 import { updateFarmPlayer } from "./playerMovement";
+import { setFarmLandLevel } from "./sceneObstacles";
 import { SweepFx } from "./sweepFx";
 import { findTrainRest, TrainController } from "./train";
 import type { SceneActivationData, WorldArea } from "./WalkingScene";
@@ -55,6 +55,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	private readonly farmProps = new FarmPropLayer(this, this.blocks);
 	private readonly placement = new FarmPlacementPreview(this, this.farmProps);
 	private readonly fencePlacement = new FencePlacementPreview(this);
+	private paintedLandLevel = -1;
 
 	private painting = false;
 	private readonly strokeTiles = new Set<string>();
@@ -89,7 +90,8 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		this.backgroundColor = ex.Color.fromHex("#79a44d");
 		this.inputManager = new InputManager();
 
-		const { sheet, tileMap } = buildTerrain();
+		this.paintedLandLevel = useGameStore.getState().activeFarm?.land_level ?? 0;
+		const { sheet, tileMap } = buildTerrain(this.paintedLandLevel);
 		this.sheet = sheet;
 		this.terrain = tileMap;
 		this.add(this.terrain);
@@ -103,21 +105,13 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		// Populate saved farm props and their collision/tool footprints.
 		this.farmProps.set(useGameStore.getState().activeFarm?.prop_overrides ?? []);
 		const farm = useGameStore.getState().activeFarm;
+		setFarmLandLevel(farm?.land_level ?? 0);
 		this.fences.set(farm?.fences ?? [], farm?.gates ?? []);
 
 		// The train is animated separately from the static prop layer.
 		this.train = new TrainController(findTrainRest(props), this);
 
-		// 4. Create Player Actor
-		this.player = new ex.Actor({
-			pos: ex.vec(FARM_PLAYER_SPAWN.x, FARM_PLAYER_SPAWN.y),
-			width: 32,
-			height: 32,
-			anchor: ex.vec(0.5, 1),
-			z: 200,
-		});
-		addFarmerGraphics(this.player);
-		this.add(this.player);
+		this.player = createFarmPlayer(this);
 
 		const pointers = engine.input.pointers;
 		pointers.primary.on("down", (evt) => {
@@ -194,6 +188,12 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		this.train.update(delta);
 		this.player.graphics.visible = this.train.isParked();
 		const farm = useGameStore.getState().activeFarm;
+		setFarmLandLevel(farm?.land_level ?? 0);
+		if ((farm?.land_level ?? 0) !== this.paintedLandLevel) {
+			this.paintedLandLevel = farm?.land_level ?? 0;
+			paintFarmTerrain(this.terrain, this.sheet, this.paintedLandLevel);
+			this.tileSync.repaint(farm);
+		}
 		this.farmProps.set(farm?.prop_overrides ?? []);
 		this.fences.set(farm?.fences ?? [], farm?.gates ?? []);
 
@@ -210,7 +210,8 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		}
 
 		const dir = this.inputManager.getMovementVector();
-		updateFarmPlayer(this.player, dir, delta, this.combo.moveSpeed);
+		updateFarmPlayer(this.player, dir, delta, this.combo.moveSpeed, farm?.land_level ?? 0);
+		followFarmPlayer(this.camera, this.player.pos, farm?.land_level ?? 0);
 		updateFarmerGraphics(this.player, dir);
 
 		const gate = nearbyGate(farm?.gates ?? [], this.player.pos);
@@ -254,7 +255,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		const column = Math.floor(worldPos.x / TILE_SIZE);
 		const row = Math.floor(worldPos.y / TILE_SIZE);
 		this.updateHover(worldPos);
-		if (column < 0 || row < 0 || column >= MAP_COLUMNS || row >= MAP_ROWS)
+		if (!ownsFarmTile(column, row, useGameStore.getState().activeFarm?.land_level ?? 0))
 			return;
 
 		const strokeKey = `${column},${row}`;
@@ -295,7 +296,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 			this.report("Something is in the way.");
 			return;
 		}
-		if (!isFarmInBounds(column, row)) {
+		if (!ownsFarmTile(column, row, useGameStore.getState().activeFarm?.land_level ?? 0)) {
 			this.report("Too far out to farm.");
 			return;
 		}

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
 	ANIMATED_PROPS,
+	farmBounds,
 	FARM_TRAIN_ENGINE_STOP,
 	FARM_TRAIN_STOP,
 	isNearFarmTrain,
-	isTillableTile,
+		isTillableTile,
+		ownsFarmTile,
 	MAP_COLUMNS,
 	MAP_HEIGHT,
 	MAP_ROWS,
@@ -40,8 +42,8 @@ describe("farm map data", () => {
 
 	it("only allows hoeing on grass", () => {
 		expect(isTillableTile(0, 0)).toBe(true);
-		expect(isTillableTile(5, 4)).toBe(false);
-		expect(isTillableTile(4, 5)).toBe(false);
+		expect(isTillableTile(5, 4)).toBe(true);
+		expect(isTillableTile(4, 5)).toBe(true);
 		expect(isTillableTile(0, 10)).toBe(false);
 		expect(isTillableTile(0, 11)).toBe(false);
 	});
@@ -59,10 +61,16 @@ describe("farm map data", () => {
 		expect(propBlocking["blue-flowers"]).toBe("base");
 	});
 
-	it("creates the main path intersection", () => {
-		expect(terrainAt(4, 4)).toBe("path-cross");
-		expect(terrainAt(5, 4)).toBe("path-horizontal");
-		expect(terrainAt(4, 5)).toBe("path-vertical");
+	it("keeps the original farm usable and expands beyond its edges", () => {
+		expect(ownsFarmTile(7, 7, 0)).toBe(true);
+		expect(ownsFarmTile(7, 2, 0)).toBe(true);
+		expect(ownsFarmTile(7, -1, 0)).toBe(false);
+		expect(ownsFarmTile(7, -1, 1)).toBe(true);
+		expect(ownsFarmTile(-1, 7, 2)).toBe(true);
+		expect(ownsFarmTile(18, 7, 3)).toBe(true);
+		expect(ownsFarmTile(7, -3, 4)).toBe(true);
+		expect(farmBounds(0)).toEqual({ minColumn: 0, maxColumn: 17, minRow: 0, maxRow: 11 });
+		expect(ownsFarmTile(0, 11, 4)).toBe(false);
 	});
 
 	it("keeps props within the map", () => {

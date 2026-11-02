@@ -105,7 +105,7 @@ export class FarmPropLayer {
 		if (!ground) return null;
 		const placement = { x, y, width: original.width, height, ground };
 		return { ...placement, reason: propPlacementReason(placement,
-			farmPlacementObstacles, farm.tiles, player) };
+			farmPlacementObstacles, farm.tiles, player, farm.land_level) };
 	}
 
 	private footprint(prop: PlacedFarmProp, height: number): TileCoord[] {

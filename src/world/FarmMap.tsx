@@ -13,6 +13,9 @@ import "../inventory/inventory.css";
 import { useInventoryStore } from "../inventory/inventoryStore";
 import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { useInventoryPersistence } from "../inventory/useInventoryPersistence";
+import { BankScene, type BankDesk } from "./BankScene";
+import { BankWindow } from "./BankWindow";
+import { bankResources } from "./bankResources";
 import { type CasinoOverlay, CasinoOverlays } from "./CasinoOverlays";
 import { CasinoScene } from "./CasinoScene";
 import { ComboCounter } from "./ComboCounter";
@@ -20,20 +23,24 @@ import { casinoResources } from "./casinoResources";
 import { FarmMapScene } from "./FarmMapScene";
 import { FishingOverlay } from "./FishingOverlay";
 import type { FarmHudSnapshot } from "./farmHud";
-import { MOVABLE_PROP_ASSETS } from "./mapData";
 import "./farmMap.css";
 import { MarketplaceScene } from "./MarketplaceScene";
 import { MarketWindow } from "./MarketWindow";
+import { LivestockMarketScene } from "./LivestockMarketScene";
+import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
+import { livestockResources } from "./livestockResources";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import { MARKETS } from "./marketData";
 import { marketplaceResources } from "./marketplaceResources";
 import { resources } from "./resources";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
+import { useFarmItemNotices, useFarmObjectInventory } from "./useFarmObjectInventory";
+import { useLivestockPurchase } from "./useLivestockPurchase";
 import type { WorldArea } from "./WalkingScene";
 
 const worldResources = [
-	...new Set([...resources, ...marketplaceResources, ...casinoResources]),
+	...new Set([...resources, ...marketplaceResources, ...casinoResources, ...livestockResources, ...bankResources]),
 ];
 
 export default function FarmMap() {
@@ -42,13 +49,14 @@ export default function FarmMap() {
 	const sceneRef = useRef<FarmMapScene | null>(null);
 	const marketSceneRef = useRef<MarketplaceScene | null>(null);
 	const casinoRef = useRef<CasinoScene | null>(null);
+	const livestockRef = useRef<LivestockMarketScene | null>(null);
+	const bankRef = useRef<BankScene | null>(null);
 	const username = useGameStore((s) => s.username);
 	const farm = useGameStore((s) => s.activeFarm);
 	const selectedHotbar = useInventoryStore((s) => s.selectedHotbar);
 	const hotbar = useInventoryStore((s) => s.hotbar);
 	const heldItem = hotbar[selectedHotbar]?.itemId ?? null;
 	const heldTool = farmToolForItem(heldItem);
-	const setItemCount = useInventoryStore((s) => s.setItemCount);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
 	const inventoryHydrated = useInventoryStore((s) => s.inventoryHydrated);
 	const pushNotice = useNotificationStore((s) => s.push);
@@ -96,45 +104,9 @@ export default function FarmMap() {
 		sceneRef.current?.noteHotbarSwap();
 	}, [selectedHotbar]);
 
-	useEffect(() => {
-		if (heldItem === "fence")
-			pushNotice(
-				"Hold left mouse to preview a fence; release on green to place.",
-				"system",
-			);
-		if (heldItem === "gate")
-			pushNotice(
-				"Gate: click clear grass to place. Press E nearby to open or close.",
-				"system",
-			);
-		if (heldItem === "shovel")
-			pushNotice(
-				"Shovel: click a fence or farm object to dig it up.",
-				"system",
-			);
-		if (heldItem && MOVABLE_PROP_ASSETS.some((asset) => asset === heldItem))
-			pushNotice(
-				`Hold left mouse to preview ${heldItem}; release on green to place.`,
-				"system",
-			);
-	}, [heldItem, pushNotice]);
+	useFarmItemNotices(heldItem);
 
-	const fenceCount = farm?.fence_count;
-	useEffect(() => {
-		if (fenceCount !== undefined && isOwner) setItemCount("fence", fenceCount);
-	}, [fenceCount, isOwner, setItemCount]);
-
-	const gateCount = farm?.gate_count;
-	useEffect(() => {
-		if (gateCount !== undefined && isOwner) setItemCount("gate", gateCount);
-	}, [gateCount, isOwner, setItemCount]);
-
-	const propInventory = farm?.prop_inventory;
-	useEffect(() => {
-		if (!propInventory || !isOwner) return;
-		for (const asset of MOVABLE_PROP_ASSETS)
-			setItemCount(asset, propInventory[asset] ?? 0);
-	}, [propInventory, isOwner, setItemCount]);
+	useFarmObjectInventory(farm, isOwner);
 
 	// Keep the local inventory's produce in sync with the authoritative barn.
 	useBarnReconcile(farm?.barn ?? null, isOwner);
@@ -145,9 +117,10 @@ export default function FarmMap() {
 
 	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
-	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(
-		null,
-	);
+	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(null);
+	const [bankDesk, setBankDesk] = useState<BankDesk | null>(null);
+	const livestock = useLivestockPurchase(isOwner, username);
+	const { select: selectAnimal, setMessage: setLivestockMessage } = livestock;
 	const [fishingOpen, setFishingOpen] = useState(false);
 	const [engineReady, setEngineReady] = useState(false);
 
@@ -191,6 +164,19 @@ export default function FarmMap() {
 		});
 		marketSceneRef.current = marketplace;
 		engine.addScene("marketplace", marketplace);
+		const livestockScene = new LivestockMarketScene(setTravelPrompt, setArea, (id) => {
+			livestockScene.setPaused(true);
+			selectAnimal(id);
+			setLivestockMessage(null);
+		});
+		livestockRef.current = livestockScene;
+		engine.addScene("livestock-market", livestockScene);
+		const bank = new BankScene(setTravelPrompt, setArea, (desk) => {
+			bank.setPaused(true);
+			setBankDesk(desk);
+		});
+		bankRef.current = bank;
+		engine.addScene("bank", bank);
 		function openCasino(overlay: CasinoOverlay) {
 			casino.setPaused(true);
 			setCasinoOverlay(overlay);
@@ -219,10 +205,12 @@ export default function FarmMap() {
 			sceneRef.current = null;
 			marketSceneRef.current = null;
 			casinoRef.current = null;
+			livestockRef.current = null;
+			bankRef.current = null;
 			engine.stop();
 			engine.dispose();
 		};
-	}, [target, isOwner, setMarket, setMarketMessage]);
+	}, [target, isOwner, setMarket, setMarketMessage, selectAnimal, setLivestockMessage]);
 
 	// Route farm hints and errors into the bottom-left feed.
 	useEffect(() => {
@@ -256,6 +244,18 @@ export default function FarmMap() {
 		setCasinoOverlay(null);
 	}
 
+	function closeLivestockPurchase() {
+		if (livestock.busy) return;
+		livestockRef.current?.setPaused(false);
+		livestock.select(null);
+		livestock.setMessage(null);
+	}
+
+	function closeBank() {
+		bankRef.current?.setPaused(false);
+		setBankDesk(null);
+	}
+
 	function closeFishing() {
 		sceneRef.current?.setOverlayPaused(false);
 		setFishingOpen(false);
@@ -284,6 +284,18 @@ export default function FarmMap() {
 					onClose={handleCloseMarket}
 				/>
 			)}
+			{livestock.pen && (
+				<LivestockPurchaseOverlay
+					pen={livestock.pen}
+					owned={farm?.animals?.[livestock.pen.id] ?? 0}
+					isOwner={isOwner}
+					busy={livestock.busy}
+					message={livestock.message}
+					onBuy={livestock.buy}
+					onClose={closeLivestockPurchase}
+				/>
+			)}
+			{bankDesk && <BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />}
 			{travelPrompt && (
 				<div className="farm-map-travel-prompt" data-testid="travel-prompt">
 					{travelPrompt}

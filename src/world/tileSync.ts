@@ -3,6 +3,7 @@ import type { CropLayer, CropTileView } from "./cropLayer";
 import type { MapProp } from "./mapData";
 import { terrainAt } from "./mapData";
 import { terrainFrames } from "./resources";
+import { farmTerrainTile } from "./farmTerrain";
 
 /** Removes tilled-over decor (flowers) on a tile. Returns the removed
  * asset keys so a future pickup feature can credit them to inventory. */
@@ -32,7 +33,7 @@ export function refreshTile(
 	row: number,
 	tile: CropTileView | undefined,
 ): void {
-	const mapTile = terrain.getTile(column, row);
+	const mapTile = farmTerrainTile(terrain, column, row);
 	if (!mapTile) return;
 	const state = tile?.state;
 	mapTile.clearGraphics();

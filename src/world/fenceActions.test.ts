@@ -9,6 +9,7 @@ const farm: ActiveFarm = {
 	tiles: [],
 	tomatoes: 0,
 	barn: {},
+	animals: {},
 	fences: [],
 	fence_count: 1,
 	gates: [],
@@ -19,8 +20,8 @@ const farm: ActiveFarm = {
 const player = { x: 800, y: 600 };
 
 describe("fence placement after gate integration", () => {
-	it("permits a clear path tile", () => {
-		expect(terrainAt(5, 4)).toBe("path-horizontal");
+	it("permits a clear grass tile", () => {
+		expect(terrainAt(5, 4)).toBe("grass");
 		expect(fencePlacementReason(farm, 5, 4, new BlockRegistry(), player)).toBeNull();
 	});
 
