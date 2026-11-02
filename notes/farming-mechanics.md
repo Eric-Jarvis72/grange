@@ -70,7 +70,10 @@ the production release.
 
 - Harvesting increments the barn row for the harvested crop by 1.
 - The market's **Seed** stall sells one seed per standard crop (priced from
-  `CROPS[*].seedCost`): wheat `2c`, lettuce `4c`, tomato `8c`.
+  `CROPS[*].seedCost`): wheat `2c`, lettuce `4c`, tomato `8c`. Each seed card
+  uses the same quantity stepper as the produce sell control, capped at what the
+  player can afford and can hold, so seeds can be bought in bulk in a single
+  transaction.
 - The market's **Produce** stall sells each of the six produce items at
   `CROPS[*].sellValue`: wheat `4c`, lettuce `7c`, tomato `5c`, Midas Wheat
   `10c`, Frost-Crisp Lettuce `15c`, Sun-Burst Tomato `8c`.

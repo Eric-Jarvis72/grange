@@ -143,15 +143,28 @@ test("the seed market opens the Seed Stall buy view", async ({ page }) => {
 		"GRANGE MARKET - SEED STALL",
 	);
 
+	// Seeds use the same quantity stepper as selling: step up to 3 and the
+	// button totals the cost.
+	await expect(page.getByTestId("market-max-tomato-seed")).toBeVisible();
+	await page.getByTestId("market-inc-tomato-seed").click();
+	await page.getByTestId("market-inc-tomato-seed").click();
+	await expect(page.getByTestId("market-action-tomato-seed")).toContainText(
+		"Buy 3 for $24",
+	);
+	await page.getByTestId("market-action-tomato-seed").click();
+	await expect(page.getByTestId("farm-balance")).toContainText("68");
+	await expect(page.getByTestId("market-owned-tomato-seed")).toContainText("14");
+
 	await page.keyboard.press("Escape");
 	await expect(market).toHaveCount(0);
 	await expect(prompt).toContainText("enter the seed market");
 
-	// The purchase is account state, not a local bump that resets to 10 on load.
+	// The purchases are account state, not a local bump that resets to 10 on
+	// load: one single buy plus the bulk buy of three leaves 14 tomato seeds.
 	await page.reload();
 	await expect(page.getByTestId("slot-hotbar-1")).toHaveAttribute(
 		"data-count",
-		"11",
+		"14",
 	);
 });
 

@@ -140,6 +140,35 @@ describe("inventory slots", () => {
 		expect(hotbar[1]).toMatchObject({ itemId: "seed-bag", count: 5 });
 	});
 
+	it("quick-moves a stack across areas and back to the first empty slot", () => {
+		useInventoryStore.getState().quickMove({ area: "hotbar", index: 0 });
+		const after = useInventoryStore.getState();
+		expect(after.hotbar[0]?.itemId).toBeNull();
+		expect(after.grid[0]).toMatchObject({ itemId: "hoe", count: 1 });
+
+		useInventoryStore.getState().quickMove({ area: "grid", index: 0 });
+		const back = useInventoryStore.getState();
+		expect(back.grid[0]?.itemId).toBeNull();
+		expect(back.hotbar[0]).toMatchObject({ itemId: "hoe", count: 1 });
+	});
+
+	it("quick-moves into an existing partial stack of the same item", () => {
+		const store = useInventoryStore.getState();
+		store.splitHalf({ area: "hotbar", index: 1 }, { area: "grid", index: 0 });
+		useInventoryStore.getState().quickMove({ area: "hotbar", index: 1 });
+		const { grid, hotbar } = useInventoryStore.getState();
+		expect(grid[0]).toMatchObject({ itemId: "seed-bag", count: 10 });
+		expect(hotbar[1]?.itemId).toBeNull();
+	});
+
+	it("quick-move does nothing for an empty slot", () => {
+		const before = useInventoryStore.getState();
+		useInventoryStore.getState().quickMove({ area: "grid", index: 0 });
+		const after = useInventoryStore.getState();
+		expect(after.grid).toEqual(before.grid);
+		expect(after.hotbar).toEqual(before.hotbar);
+	});
+
 	it("removes items across slots and empties drained ones", () => {
 		const store = useInventoryStore.getState();
 		expect(store.removeItem("seed-bag", 4)).toBe(4);
