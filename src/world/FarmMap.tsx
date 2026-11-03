@@ -1,5 +1,5 @@
 import * as ex from "excalibur";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
@@ -28,11 +28,13 @@ import { MarketplaceScene } from "./MarketplaceScene";
 import { MarketWindow } from "./MarketWindow";
 import { LivestockMarketScene } from "./LivestockMarketScene";
 import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
+import { LightingOverlay } from "./LightingOverlay";
 import { livestockResources } from "./livestockResources";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import { MARKETS } from "./marketData";
 import { marketplaceResources } from "./marketplaceResources";
 import { resources } from "./resources";
+import { SleepVoteToast } from "./SleepVoteToast";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
 import { useFarmItemNotices, useFarmObjectInventory } from "./useFarmObjectInventory";
@@ -45,6 +47,8 @@ const worldResources = [
 
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const getGameCanvas = useCallback(() => canvasRef.current, []);
+	const [gameEngine, setGameEngine] = useState<ex.Engine | null>(null);
 	useInventoryKeys();
 	const sceneRef = useRef<FarmMapScene | null>(null);
 	const marketSceneRef = useRef<MarketplaceScene | null>(null);
@@ -139,6 +143,7 @@ export default function FarmMap() {
 			suppressConsoleBootMessage: true,
 			backgroundColor: ex.Color.fromHex("#79a44d"),
 		});
+		setGameEngine(engine);
 
 		const scene = new FarmMapScene(
 			target,
@@ -207,6 +212,7 @@ export default function FarmMap() {
 			casinoRef.current = null;
 			livestockRef.current = null;
 			bankRef.current = null;
+			setGameEngine(null);
 			engine.stop();
 			engine.dispose();
 		};
@@ -276,6 +282,7 @@ export default function FarmMap() {
 				className="farm-map-canvas"
 				aria-label={`${area} map. Use WASD or arrow keys to walk.`}
 			/>
+			<LightingOverlay engine={gameEngine} area={area} getGameCanvas={getGameCanvas} />
 			{market && (
 				<MarketWindow
 					market={MARKETS[market]}
@@ -297,7 +304,10 @@ export default function FarmMap() {
 			)}
 			{bankDesk && <BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />}
 			{travelPrompt && (
-				<div className="farm-map-travel-prompt" data-testid="travel-prompt">
+				<div
+					className={`farm-map-travel-prompt${travelPrompt.includes("closed") ? " farm-map-travel-prompt-closed" : ""}`}
+					data-testid="travel-prompt"
+				>
 					{travelPrompt}
 				</div>
 			)}
@@ -316,6 +326,7 @@ export default function FarmMap() {
 			)}
 			<ComboCounter />
 			<InventoryPanel />
+			<SleepVoteToast />
 			{paused && <PauseMenu />}
 			{fishingOpen && <FishingOverlay onClose={closeFishing} />}
 			<CasinoOverlays open={casinoOverlay} onClose={closeCasinoOverlay} />

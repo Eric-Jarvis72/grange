@@ -11,6 +11,7 @@ defmodule Grange.Application do
         Grange.Repo
       ] ++
         ticker_children() ++
+        clock_children() ++
         [GrangeWeb.Endpoint]
 
     opts = [strategy: :one_for_one, name: Grange.Supervisor]
@@ -24,6 +25,12 @@ defmodule Grange.Application do
   # The ticker is unnecessary in tests, which drive `FarmStore.tick/1` directly.
   defp ticker_children do
     if Application.get_env(:grange, :start_ticker, true), do: [Grange.FarmTicker], else: []
+  end
+
+  # The clock always runs so snapshots are available; only its broadcasts are
+  # disabled in tests (see `start_world_clock` in config/test.exs).
+  defp clock_children do
+    [Grange.WorldClock, Grange.FarmPresence, Grange.SleepVotes]
   end
 
   # SQLite needs no separate "create" step, and running migrations here keeps

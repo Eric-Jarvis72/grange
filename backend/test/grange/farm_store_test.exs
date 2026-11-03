@@ -43,7 +43,9 @@ defmodule Grange.FarmStoreTest do
     assert view.gates == []
     assert view.gate_count == 2
     assert FarmStore.has_farm?("Alice")
-    assert full_farm("Alice") == view
+    # The world clock advances between reads, so compare everything but time.
+    assert Map.drop(full_farm("Alice"), [:time, :cycle_time_ms, :day_phase]) ==
+             Map.drop(view, [:time, :cycle_time_ms, :day_phase])
   end
 
   test "fences persist per farm, connect as coordinates, and shovel returns stock" do

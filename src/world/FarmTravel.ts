@@ -11,6 +11,7 @@ export class FarmTravel {
 	constructor(
 		private readonly onPromptChange: (prompt: string | null) => void,
 		private readonly onAreaChange: (area: WorldArea) => void,
+		private readonly isNight: () => boolean = () => false,
 	) {}
 
 	activate(): void {
@@ -32,9 +33,14 @@ export class FarmTravel {
 			return;
 		}
 		const nearTrain = isNearFarmTrain(player.pos.x, player.pos.y);
-		const canBoard = nearTrain && train.canBoard();
+		const night = this.isNight();
+		const canBoard = nearTrain && train.canBoard() && !night;
 		this.setPrompt(
-			canBoard ? "Press E or Enter to travel to the marketplace" : null,
+			nearTrain && night
+				? "The Hub World Market is closed at night."
+				: canBoard
+					? "Press E or Enter to travel to the marketplace"
+					: null,
 		);
 		if (!canBoard || this.traveling) return;
 		if (!input.consumePress("KeyE", "Enter")) return;

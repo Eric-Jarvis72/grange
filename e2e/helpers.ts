@@ -139,7 +139,7 @@ export async function walkToSeedMarket(
 
 /** Walks from the farm spawn through the marketplace and into the casino. */
 export async function walkToCasino(page: Page): Promise<void> {
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	const prompt = page.getByTestId("travel-prompt");
 
 	await page.keyboard.down("d");

@@ -5,6 +5,9 @@ config :grange, ecto_repos: [Grange.Repo]
 # Crops ripen on a timer in dev/prod; tests drive `FarmStore.tick/1` directly.
 config :grange, start_ticker: true
 
+# The global day/night clock broadcasts a snapshot every second in dev/prod.
+config :grange, start_world_clock: true
+
 config :grange, GrangeWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   url: [host: "localhost"],

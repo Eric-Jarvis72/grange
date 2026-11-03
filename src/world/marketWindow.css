@@ -447,6 +447,50 @@
 	border-color: #2b1709;
 }
 
+.market-seed-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	margin-top: 0.4rem;
+}
+
+.market-card-owned {
+	font-size: 0.65rem;
+	color: #e3d3b0;
+}
+
+.market-seed-stepper {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.25rem;
+}
+
+.market-seed-stepper button {
+	padding: 0.15rem 0.4rem;
+	border: 2px solid #2b1709;
+	border-radius: 0.15rem;
+	background: #d8c39e;
+	color: #2b1709;
+	font: inherit;
+	font-size: 0.65rem;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.market-seed-stepper button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.market-qty {
+	min-width: 1.8rem;
+	text-align: center;
+	font-size: 0.75rem;
+	font-weight: 700;
+	color: #f4e8d0;
+}
+
 @media (max-width: 720px) {
 	.market-split {
 		grid-template-columns: 1fr;

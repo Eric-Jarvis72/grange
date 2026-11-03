@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { MarketItemControl } from "./MarketWindow";
 import type { ProduceStallEntry, SeedStallEntry } from "./marketCatalog";
 import {
@@ -14,6 +15,10 @@ interface SeedCardProps {
 
 /** A parchment buy card for one seed in the Seed Stall. */
 export function SeedCard({ entry, control }: SeedCardProps) {
+	const max = Math.max(1, control.maxQuantity ?? 1);
+	const [quantity, setQuantity] = useState(1);
+	const current = Math.min(quantity, max);
+
 	return (
 		<article
 			className="market-card market-seed-card"
@@ -32,15 +37,64 @@ export function SeedCard({ entry, control }: SeedCardProps) {
 			>
 				{entry.price} GC
 			</span>
-			<button
-				type="button"
-				className="market-btn market-btn-buy"
-				data-testid={`market-buy-${entry.marketItemId}`}
-				disabled={control.disabled}
-				onClick={() => control.onAction(1)}
+			<span
+				className="market-card-owned"
+				data-testid={`market-owned-${entry.marketItemId}`}
 			>
-				BUY
-			</button>
+				Owned: {control.owned}
+			</span>
+			<div className="market-seed-actions">
+				<button
+					type="button"
+					className="market-btn market-btn-buy"
+					data-testid={`market-buy-${entry.marketItemId}`}
+					disabled={control.disabled}
+					onClick={() => control.onAction(1)}
+				>
+					BUY
+				</button>
+				<div className="market-seed-stepper">
+					<button
+						type="button"
+						data-testid={`market-max-${entry.marketItemId}`}
+						disabled={control.disabled}
+						onClick={() => setQuantity(max)}
+					>
+						MAX
+					</button>
+					<button
+						type="button"
+						data-testid={`market-dec-${entry.marketItemId}`}
+						disabled={control.disabled || current <= 1}
+						onClick={() => setQuantity((value) => Math.max(1, value - 1))}
+					>
+						−
+					</button>
+					<span
+						className="market-qty"
+						data-testid={`market-qty-${entry.marketItemId}`}
+					>
+						×{current}
+					</span>
+					<button
+						type="button"
+						data-testid={`market-inc-${entry.marketItemId}`}
+						disabled={control.disabled || current >= max}
+						onClick={() => setQuantity((value) => Math.min(max, value + 1))}
+					>
+						+
+					</button>
+				</div>
+				<button
+					type="button"
+					className="market-btn market-btn-buy"
+					data-testid={`market-action-${entry.marketItemId}`}
+					disabled={control.disabled}
+					onClick={() => control.onAction(current)}
+				>
+					Buy {current} for ${entry.price * current}
+				</button>
+			</div>
 		</article>
 	);
 }

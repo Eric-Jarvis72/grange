@@ -14,6 +14,21 @@
 	image-rendering: pixelated;
 }
 
+.farm-map-lighting-canvas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	image-rendering: pixelated;
+	z-index: 2;
+}
+
+.farm-map-travel-prompt-closed {
+	border-color: #a33b30;
+	color: #ff9b8c;
+}
+
 .farm-map-travel-prompt {
 	position: absolute;
 	bottom: 7.25rem;

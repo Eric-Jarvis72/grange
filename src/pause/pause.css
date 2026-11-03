@@ -90,6 +90,21 @@
 	outline-color: rgba(214, 69, 65, 0.55);
 }
 
+.pause-button:disabled {
+	color: #8a7d66;
+	cursor: not-allowed;
+	transform: none;
+	text-shadow: 2px 2px 0 #17110a;
+}
+
+.pause-button:disabled:hover,
+.pause-button:disabled:focus-visible {
+	color: #8a7d66;
+	transform: none;
+	text-shadow: 2px 2px 0 #17110a;
+	outline: none;
+}
+
 .pause-note {
 	margin: 0;
 	text-align: center;

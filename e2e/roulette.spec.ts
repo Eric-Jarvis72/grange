@@ -11,7 +11,7 @@ test("the roulette table opens a playable sub-screen", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Spinner"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	await page.waitForLoadState("networkidle");
 	await walkToCasino(page);
 

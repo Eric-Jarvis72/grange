@@ -42,7 +42,7 @@ test("the train travels between the farm and marketplace", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Traveler"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	await expect(canvas).toHaveAttribute("aria-label", /^Farm map/);
 	await page.waitForLoadState("networkidle");
 
@@ -64,7 +64,7 @@ test("the marketplace casino opens and returns outside", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Highroller"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	const prompt = page.getByTestId("travel-prompt");
 	await page.waitForLoadState("networkidle");
 	await page.keyboard.down("d");
@@ -90,7 +90,7 @@ test("the seed market opens the Seed Stall buy view", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Seedseller"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	const prompt = page.getByTestId("travel-prompt");
 	await page.waitForLoadState("networkidle");
 	await page.keyboard.down("d");
@@ -181,7 +181,7 @@ test("the produce market opens the Produce Stall sell grid", async ({
 	await page.keyboard.up("d");
 	await expect(prompt).toContainText("travel to the marketplace");
 	await page.keyboard.press("e");
-	await expect(page.locator("canvas")).toHaveAttribute(
+	await expect(page.locator("canvas.farm-map-canvas")).toHaveAttribute(
 		"aria-label",
 		/^Marketplace map/,
 	);
@@ -284,7 +284,7 @@ test("selling a harvested tomato credits the wallet", async ({
 	await page.waitForTimeout(1_000);
 	await page.keyboard.up("d");
 	await page.keyboard.press("e");
-	await expect(page.locator("canvas")).toHaveAttribute(
+	await expect(page.locator("canvas.farm-map-canvas")).toHaveAttribute(
 		"aria-label",
 		/^Marketplace map/,
 	);
@@ -338,7 +338,7 @@ test("the blackjack table opens a playable sub-screen", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Cardcounter"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	const prompt = page.getByTestId("travel-prompt");
 	await page.waitForLoadState("networkidle");
 

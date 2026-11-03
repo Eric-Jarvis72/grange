@@ -11,7 +11,7 @@ test("the poker table opens a playable sub-screen", async ({ page }) => {
 	await resetServer();
 	await register(page, uniqueName("Shark"));
 
-	const canvas = page.locator("canvas");
+	const canvas = page.locator("canvas.farm-map-canvas");
 	const prompt = page.getByTestId("travel-prompt");
 	await page.waitForLoadState("networkidle");
 

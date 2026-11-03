@@ -1,4 +1,5 @@
 import { type Channel, Socket } from "phoenix";
+import type { WorldTime } from "../shared/mechanics";
 import type {
 	ActiveFarm,
 	FarmAction,
@@ -6,6 +7,8 @@ import type {
 	FarmPropAction,
 	FarmSummary,
 	Player,
+	SleepVote,
+	SleepVoteResultPayload,
 } from "../shared/types";
 import { countItem, useInventoryStore } from "./inventory/inventoryStore";
 import { reconcileServerItems } from "./inventory/itemSync";
@@ -68,6 +71,12 @@ function applyServerItems(items: Record<string, number> | undefined): void {
 	});
 }
 
+/** Stores a farm and mirrors its clock snapshot into the global time state. */
+function applyFarm(farm: ActiveFarm): void {
+	useGameStore.getState().setActiveFarm(farm);
+	if (farm.time) useGameStore.getState().setWorldTime(farm.time);
+}
+
 function joinLobby(): Channel {
 	if (lobby) return lobby;
 
@@ -83,16 +92,23 @@ function joinLobby(): Channel {
 		useGameStore.getState().setFarms(farms);
 	});
 
+	channel.on("worldTime", (payload: unknown) => {
+		const { time } = payload as { time: WorldTime };
+		useGameStore.getState().setWorldTime(time);
+	});
+
 	channel
 		.join()
 		.receive("ok", (payload: unknown) => {
-			const { players, farms, items } = payload as {
+			const { players, farms, items, time } = payload as {
 				players: Player[];
 				farms: FarmSummary[];
 				items?: Record<string, number>;
+				time?: WorldTime;
 			};
 			useGameStore.getState().setPlayers(players);
 			useGameStore.getState().setFarms(farms);
+			if (time) useGameStore.getState().setWorldTime(time);
 			applyServerItems(items);
 		})
 		.receive("error", () => {
@@ -135,7 +151,18 @@ export function emitVisitFarm(
 
 	channel.on("farmUpdate", (payload: unknown) => {
 		const { farm } = payload as { farm: ActiveFarm };
-		useGameStore.getState().setActiveFarm(farm);
+		applyFarm(farm);
+	});
+
+	channel.on("sleepVote", (payload: unknown) => {
+		const { vote } = payload as { vote: SleepVote };
+		useGameStore.getState().setSleepVote(vote);
+	});
+
+	channel.on("sleepResult", (payload: unknown) => {
+		const result = payload as SleepVoteResultPayload;
+		useGameStore.getState().setSleepVote(null);
+		useGameStore.getState().setSleepResult(result);
 	});
 
 	channel
@@ -145,7 +172,7 @@ export function emitVisitFarm(
 			const previous = farmChannel;
 			farmChannel = channel;
 			farmOwner = owner;
-			useGameStore.getState().setActiveFarm(farm);
+			applyFarm(farm);
 			// Leaving the old channel drops this socket's subscription.
 			if (previous && previous !== channel) previous.leave();
 			cb?.({ ok: true, farm });
@@ -167,6 +194,8 @@ export function emitLeaveFarm(cb?: (res: Ack) => void): void {
 	farmChannel = null;
 	farmOwner = null;
 	useGameStore.getState().setActiveFarm(null);
+	useGameStore.getState().setSleepVote(null);
+	useGameStore.getState().setSleepResult(null);
 	cb?.({ ok: true });
 }
 
@@ -259,6 +288,50 @@ export function emitSellProduce(
 		.receive("ok", () => cb?.({ ok: true }))
 		.receive("error", (payload: unknown) =>
 			cb?.({ ok: false, error: reasonOf(payload) ?? "Could not sell" }),
+		)
+		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
+}
+
+/** Asks the visited farm to sleep, advancing a night when approved. */
+export function emitSleep(
+	owner: string,
+	cb?: (res: Ack & { result?: string }) => void,
+): void {
+	const channel = farmChannel;
+	if (!channel || farmOwner !== owner) {
+		cb?.({ ok: false, error: "not visiting farm" });
+		return;
+	}
+
+	channel
+		.push("sleep", {})
+		.receive("ok", (payload: unknown) => {
+			const { result } = payload as { result?: string };
+			cb?.({ ok: true, result });
+		})
+		.receive("error", (payload: unknown) =>
+			cb?.({ ok: false, error: reasonOf(payload) ?? "Could not sleep" }),
+		)
+		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
+}
+
+/** Casts this player's yes/no in an active farm sleep vote. */
+export function emitSleepVote(
+	owner: string,
+	decision: "accept" | "decline",
+	cb?: (res: Ack) => void,
+): void {
+	const channel = farmChannel;
+	if (!channel || farmOwner !== owner) {
+		cb?.({ ok: false, error: "not visiting farm" });
+		return;
+	}
+
+	channel
+		.push("sleepVote", { decision })
+		.receive("ok", () => cb?.({ ok: true }))
+		.receive("error", (payload: unknown) =>
+			cb?.({ ok: false, error: reasonOf(payload) ?? "Vote failed" }),
 		)
 		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
 }

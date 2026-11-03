@@ -1,6 +1,6 @@
 import * as ex from "excalibur";
 import type { FarmToolId } from "../../shared/farm";
-import { useGameStore } from "../store";
+import { isNightNow, useGameStore } from "../store";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { farmToolForItem } from "../inventory/items";
 import { BlockRegistry } from "./blocking";
@@ -83,6 +83,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		this.travel = new FarmTravel(
 			(prompt) => this.fishing.setTravelPrompt(prompt),
 			onAreaChange,
+			isNightNow,
 		);
 	}
 
