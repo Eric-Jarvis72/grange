@@ -1,7 +1,7 @@
 defmodule Grange.FarmProps do
   @moduledoc "Persists movable starter props without duplicating their initial rows."
   import Ecto.Query
-  alias Grange.{FarmProp, Repo}
+  alias Grange.{FarmProp, FarmRecord, Land, Repo}
 
   # Stable source indices match the starter prop list in src/world/mapData.ts.
   # The train (12) is intentionally excluded: it anchors market travel.
@@ -49,7 +49,7 @@ defmodule Grange.FarmProps do
 
   def place(owner, asset, x, y) when is_binary(asset) and is_integer(x) and is_integer(y) do
     with {:ok, width} <- place_width(asset),
-         true <- valid_spot?(x, y, width) do
+         true <- valid_spot?(owner, x, y, width) do
       case carried_prop(owner, asset) do
         nil ->
           {:error, "object is not in inventory"}
@@ -107,10 +107,13 @@ defmodule Grange.FarmProps do
     end
   end
 
-  defp valid_spot?(x, y, width) do
+  defp valid_spot?(owner, x, y, width) do
+    %{land_level: level} = Repo.get!(FarmRecord, owner)
+    b = Land.bounds(level)
+
     rem(x, 2) == 0 and rem(y, 2) == 0 and
-      x - div(width, 2) >= 0 and x + div(width, 2) <= 1152 and
-      y >= 0 and y <= 704
+      x - div(width, 2) >= b.min_x * 64 and x + div(width, 2) <= (b.max_x + 1) * 64 and
+      y >= b.min_y * 64 and y <= 704
   end
 
   @doc "Runs a dig/place prop action inside a transaction."

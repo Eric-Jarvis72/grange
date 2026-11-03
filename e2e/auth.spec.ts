@@ -5,7 +5,6 @@ import {
 	login,
 	register,
 	registerAccount,
-	resetServer,
 	uniqueName,
 	waitForWorld,
 } from "./helpers";
@@ -13,7 +12,6 @@ import {
 test("a new account registers, lands on the main menu, then enters the farm", async ({
 	page,
 }) => {
-	await resetServer();
 	const name = uniqueName("Sprout");
 	await registerAccount(page, name);
 
@@ -27,7 +25,6 @@ test("a new account registers, lands on the main menu, then enters the farm", as
 });
 
 test("wrong credentials do not get past the login screen", async ({ page }) => {
-	await resetServer();
 	const name = uniqueName("Sprout");
 	await register(page, name);
 
@@ -48,7 +45,6 @@ test("wrong credentials do not get past the login screen", async ({ page }) => {
 test("an unknown username is rejected with the same generic message", async ({
 	page,
 }) => {
-	await resetServer();
 	await page.goto(`${BASE}/login`);
 	await page.getByTestId("username").fill(uniqueName("Ghost"));
 	await page.getByTestId("password").fill("whatever-123");
@@ -61,7 +57,6 @@ test("an unknown username is rejected with the same generic message", async ({
 });
 
 test("a session survives a page reload", async ({ page }) => {
-	await resetServer();
 	const name = uniqueName("Sprout");
 	await register(page, name);
 
@@ -77,7 +72,6 @@ test("a session survives a page reload", async ({ page }) => {
 test("protected routes redirect to the main menu without a session", async ({
 	page,
 }) => {
-	await resetServer();
 	await page.goto(`${BASE}/dashboard`);
 	await expect(page).toHaveURL(`${BASE}/`);
 	await expect(page.getByTestId("menu-login")).toBeVisible();
@@ -86,7 +80,6 @@ test("protected routes redirect to the main menu without a session", async ({
 test("signing out clears the session so protected routes close again", async ({
 	page,
 }) => {
-	await resetServer();
 	await login(page, uniqueName("Sprout"));
 
 	await page.keyboard.press("Escape");
@@ -100,7 +93,6 @@ test("signing out clears the session so protected routes close again", async ({
 test("registration rejects a short password and a duplicate username", async ({
 	page,
 }) => {
-	await resetServer();
 	const name = uniqueName("Sprout");
 
 	await page.goto(`${BASE}/login`);

@@ -7,12 +7,8 @@ import { economy } from "./EconomyManager";
 import { type FishId, isFishId, isRodId, RODS } from "./fishingData";
 import { useFishingStore } from "./fishingStore";
 import type { MarketItemControl } from "./MarketWindow";
-import {
-	MARKET_ITEMS,
-	type MarketId,
-	type MarketItemId,
-	maxSeedPurchase,
-} from "./marketData";
+import { MARKET_ITEMS, type MarketId, type MarketItemId } from "./marketData";
+import { seedPurchaseCap } from "./seedPurchase";
 import { useEconomyBalance } from "./useEconomy";
 
 /** Market seed id -> the inventory item it grants. */
@@ -53,8 +49,8 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 
 	async function buySeed(id: MarketItemId, quantity: number) {
 		const item = MARKET_ITEMS[id];
-		const count = Math.max(1, Math.floor(quantity));
-		if (!SEED_ITEMS[id]) return;
+		const count = Math.floor(quantity);
+		if (!SEED_ITEMS[id] || count < 1) return;
 		try {
 			const res = await fetch("/api/inventory/buy", {
 				method: "POST",
@@ -157,15 +153,16 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 				];
 			}
 			if (item.kind === "buy") {
-				const owned = seedOwned[item.id] ?? 0;
-				const max = maxSeedPurchase(item.price, balance, owned);
+				const seedId = SEED_ITEMS[item.id];
 				return [
 					item.id,
 					{
-						owned,
-						disabled: max < 1,
+						owned: seedOwned[item.id] ?? 0,
+						disabled: balance < item.price,
 						actionLabel: "Buy",
-						maxQuantity: max,
+						maxQuantity: seedId
+							? seedPurchaseCap(balance, item.price, seedId)
+							: undefined,
 						onAction: (quantity: number) => buySeed(item.id, quantity),
 					},
 				];

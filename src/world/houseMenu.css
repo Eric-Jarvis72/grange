@@ -1,0 +1,23 @@
+.house-panel {
+	width: min(25rem, 100%);
+}
+
+.house-copy {
+	margin: 0;
+	text-align: center;
+	font-size: 0.75rem;
+	color: #c9b89a;
+}
+
+.house-detail {
+	margin: -0.1rem 0 0.65rem;
+	font-size: 0.68rem;
+	line-height: 1.35;
+	color: #9a8b72;
+}
+
+.pause-button:disabled {
+	cursor: default;
+	opacity: 0.55;
+	transform: none;
+}

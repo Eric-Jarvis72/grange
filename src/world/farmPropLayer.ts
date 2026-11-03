@@ -84,6 +84,12 @@ export class FarmPropLayer {
 		);
 	}
 
+	/** Where `asset` currently stands, or null while it is carried/digged up. */
+	position(asset: string): { x: number; y: number } | null {
+		const found = this.rendered.find(({ prop }) => prop.asset === asset);
+		return found ? { x: found.prop.x, y: found.prop.y } : null;
+	}
+
 	placement(
 		asset: MovablePropKey,
 		x: number,
@@ -105,7 +111,7 @@ export class FarmPropLayer {
 		if (!ground) return null;
 		const placement = { x, y, width: original.width, height, ground };
 		return { ...placement, reason: propPlacementReason(placement,
-			farmPlacementObstacles, farm.tiles, player) };
+			farmPlacementObstacles, farm.tiles, player, farm.land_level) };
 	}
 
 	private footprint(prop: PlacedFarmProp, height: number): TileCoord[] {

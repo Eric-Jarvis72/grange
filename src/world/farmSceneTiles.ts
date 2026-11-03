@@ -21,6 +21,11 @@ export class FarmTileSync {
 
 	constructor(private readonly deps: TileSyncDeps) {}
 
+	/** Restores cultivated graphics after a land expansion repaints the base map. */
+	repaint(farm: ActiveFarm | null): void {
+		for (const tile of farm?.tiles ?? []) this.paint(tile.x, tile.y, tile);
+	}
+
 	/** Returns true when the field changed and the HUD should refresh. */
 	sync(farm: ActiveFarm | null): boolean {
 		let changed = false;

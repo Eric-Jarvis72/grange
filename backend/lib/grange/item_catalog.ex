@@ -13,6 +13,7 @@ defmodule Grange.ItemCatalog do
     wheat-seed lettuce-seed midas-wheat-seed frost-lettuce-seed sunburst-tomato-seed
     fence gate farmhouse barn well bench sign barrel crate oak-tree pine-tree apple-tree
     daisies marigolds blue-flowers
+    cow hen sheep pig
     minnow bluegill carp catfish trout salmon golden-carp phishing loan-sharks-brother
   )
 

@@ -1,5 +1,5 @@
 import type { ActiveFarm } from "../../shared/types";
-import { MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from "./mapData";
+import { farmBounds, MAP_HEIGHT, TILE_SIZE } from "./mapData";
 import type { WalkObstacle } from "./walkCollisions";
 
 export interface PropPlacement {
@@ -26,10 +26,14 @@ export function propPlacementReason(
 	obstacles: WalkObstacle[],
 	tiles: ActiveFarm["tiles"],
 	player: { x: number; y: number },
+	landLevel = 0,
 ): string | null {
 	const { x, y, width, height, ground } = placement;
-	if (x - width / 2 < 0 || x + width / 2 > MAP_WIDTH || y - height < 0 ||
-		ground.top < 0 || ground.bottom > MAP_HEIGHT - TILE_SIZE)
+	const bounds = farmBounds(landLevel);
+	if (x - width / 2 < bounds.minColumn * TILE_SIZE ||
+		x + width / 2 > (bounds.maxColumn + 1) * TILE_SIZE ||
+		y - height < bounds.minRow * TILE_SIZE ||
+		ground.top < bounds.minRow * TILE_SIZE || ground.bottom > MAP_HEIGHT - TILE_SIZE)
 		return "Keep the object on the farm, out of the water.";
 	if (obstacles.some((box) => overlaps(ground, box)))
 		return "Another object or fence occupies that space.";

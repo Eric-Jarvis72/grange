@@ -1,4 +1,4 @@
-import * as ex from "excalibur";
+import type * as ex from "excalibur";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Hud } from "../inventory/Hud";
@@ -7,48 +7,54 @@ import { farmToolForItem } from "../inventory/items";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { PauseMenu } from "../pause/PauseMenu";
 import { usePauseStore } from "../pause/pauseStore";
-import { emitLeaveFarm, emitVisitFarm } from "../socket";
+import { emitLeaveFarm, emitPauseFarmVisit, emitVisitFarm } from "../socket";
 import { useGameStore } from "../store";
 import "../inventory/inventory.css";
 import { useInventoryStore } from "../inventory/inventoryStore";
 import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { useInventoryPersistence } from "../inventory/useInventoryPersistence";
+import type { BankDesk, BankScene } from "./BankScene";
+import { BankWindow } from "./BankWindow";
 import { type CasinoOverlay, CasinoOverlays } from "./CasinoOverlays";
-import { CasinoScene } from "./CasinoScene";
+import type { CasinoScene } from "./CasinoScene";
 import { ComboCounter } from "./ComboCounter";
-import { casinoResources } from "./casinoResources";
-import { FarmMapScene } from "./FarmMapScene";
+import type { FarmMapScene } from "./FarmMapScene";
 import { FishingOverlay } from "./FishingOverlay";
 import type { FarmHudSnapshot } from "./farmHud";
-import { MOVABLE_PROP_ASSETS } from "./mapData";
+import { subscribeFarmPeers } from "./farmPresence";
 import "./farmMap.css";
-import { MarketplaceScene } from "./MarketplaceScene";
+import { HouseMenu } from "./HouseMenu";
+import { leaveHub, subscribeHubPeers } from "./hubClient";
+import type { MarketplaceScene } from "./MarketplaceScene";
 import { MarketWindow } from "./MarketWindow";
-import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
+import type { LivestockMarketScene } from "./LivestockMarketScene";
+import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
 import { MARKETS } from "./marketData";
-import { marketplaceResources } from "./marketplaceResources";
-import { resources } from "./resources";
+import { TravelMenu } from "./TravelMenu";
+import { useHouseMenu } from "./useHouseMenu";
+import { useWorldEngine } from "./useWorldEngine";
+import { useWorldTravel } from "./useWorldTravel";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
+import { useFarmItemNotices, useFarmObjectInventory } from "./useFarmObjectInventory";
+import { useLivestockPurchase } from "./useLivestockPurchase";
 import type { WorldArea } from "./WalkingScene";
-
-const worldResources = [
-	...new Set([...resources, ...marketplaceResources, ...casinoResources]),
-];
 
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const engineRef = useRef<ex.Engine | null>(null);
 	useInventoryKeys();
 	const sceneRef = useRef<FarmMapScene | null>(null);
 	const marketSceneRef = useRef<MarketplaceScene | null>(null);
 	const casinoRef = useRef<CasinoScene | null>(null);
+	const livestockRef = useRef<LivestockMarketScene | null>(null);
+	const bankRef = useRef<BankScene | null>(null);
 	const username = useGameStore((s) => s.username);
 	const farm = useGameStore((s) => s.activeFarm);
 	const selectedHotbar = useInventoryStore((s) => s.selectedHotbar);
 	const hotbar = useInventoryStore((s) => s.hotbar);
 	const heldItem = hotbar[selectedHotbar]?.itemId ?? null;
 	const heldTool = farmToolForItem(heldItem);
-	const setItemCount = useInventoryStore((s) => s.setItemCount);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
 	const inventoryHydrated = useInventoryStore((s) => s.inventoryHydrated);
 	const pushNotice = useNotificationStore((s) => s.push);
@@ -64,6 +70,7 @@ export default function FarmMap() {
 
 	const target = owner ?? username;
 	const isOwner = target === username;
+	const [area, setArea] = useState<WorldArea>("Farm");
 	const {
 		market,
 		marketMessage,
@@ -76,12 +83,18 @@ export default function FarmMap() {
 	useEffect(() => {
 		if (!target) return;
 
+		if (area !== "Farm") {
+			emitPauseFarmVisit();
+			return;
+		}
+
 		emitVisitFarm(target, (res) => {
 			if (!res.ok) navigate("/dashboard", { replace: true });
 		});
+	}, [target, area, navigate]);
 
-		return () => emitLeaveFarm();
-	}, [target, navigate]);
+	// Unmounting the world must clear the active farm and presence.
+	useEffect(() => () => emitLeaveFarm(), []);
 
 	// Selecting a hotbar slot drives the farm hint (the hotbar is the single
 	// tool selector). The action itself reads the held item directly.
@@ -96,45 +109,9 @@ export default function FarmMap() {
 		sceneRef.current?.noteHotbarSwap();
 	}, [selectedHotbar]);
 
-	useEffect(() => {
-		if (heldItem === "fence")
-			pushNotice(
-				"Hold left mouse to preview a fence; release on green to place.",
-				"system",
-			);
-		if (heldItem === "gate")
-			pushNotice(
-				"Gate: click clear grass to place. Press E nearby to open or close.",
-				"system",
-			);
-		if (heldItem === "shovel")
-			pushNotice(
-				"Shovel: click a fence or farm object to dig it up.",
-				"system",
-			);
-		if (heldItem && MOVABLE_PROP_ASSETS.some((asset) => asset === heldItem))
-			pushNotice(
-				`Hold left mouse to preview ${heldItem}; release on green to place.`,
-				"system",
-			);
-	}, [heldItem, pushNotice]);
+	useFarmItemNotices(heldItem);
 
-	const fenceCount = farm?.fence_count;
-	useEffect(() => {
-		if (fenceCount !== undefined && isOwner) setItemCount("fence", fenceCount);
-	}, [fenceCount, isOwner, setItemCount]);
-
-	const gateCount = farm?.gate_count;
-	useEffect(() => {
-		if (gateCount !== undefined && isOwner) setItemCount("gate", gateCount);
-	}, [gateCount, isOwner, setItemCount]);
-
-	const propInventory = farm?.prop_inventory;
-	useEffect(() => {
-		if (!propInventory || !isOwner) return;
-		for (const asset of MOVABLE_PROP_ASSETS)
-			setItemCount(asset, propInventory[asset] ?? 0);
-	}, [propInventory, isOwner, setItemCount]);
+	useFarmObjectInventory(farm, isOwner);
 
 	// Keep the local inventory's produce in sync with the authoritative barn.
 	useBarnReconcile(farm?.barn ?? null, isOwner);
@@ -143,86 +120,56 @@ export default function FarmMap() {
 	// The visited farm may belong to someone else; the save is scoped by session.
 	useInventoryPersistence(inventoryHydrated, username);
 
-	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
-	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(
-		null,
-	);
+	const [hubPeers, setHubPeers] = useState<string[]>([]);
+	const [farmPeers, setFarmPeers] = useState<string[]>([]);
+	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(null);
+	const [bankDesk, setBankDesk] = useState<BankDesk | null>(null);
+	const livestock = useLivestockPurchase(isOwner, username);
+	const { select: selectAnimal, setMessage: setLivestockMessage } = livestock;
 	const [fishingOpen, setFishingOpen] = useState(false);
 	const [engineReady, setEngineReady] = useState(false);
+	const { houseOpen, openHouseMenu, closeHouseMenu } = useHouseMenu(sceneRef);
+	const { openFarmTravelMenu, openMarketplaceTravelMenu } = useWorldTravel({
+		target,
+		username,
+		sceneRef,
+		marketRef: marketSceneRef,
+		engineRef,
+	});
 
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas || !target) return;
+	// Names only change on join/leave, so this does not re-render per frame.
+	useEffect(() => subscribeHubPeers(setHubPeers), []);
+	useEffect(() => subscribeFarmPeers(setFarmPeers), []);
 
-		let cancelled = false;
-		setEngineReady(false);
-		const engine = new ex.Engine({
-			canvasElement: canvas,
-			viewport: { width: MAP_WIDTH, height: MAP_HEIGHT },
-			resolution: { width: MAP_WIDTH, height: MAP_HEIGHT },
-			displayMode: ex.DisplayMode.FitContainer,
-			pixelArt: true,
-			suppressConsoleBootMessage: true,
-			backgroundColor: ex.Color.fromHex("#79a44d"),
-		});
+	// The scenes leave the hub when they deactivate; this covers unmounts.
+	useEffect(() => () => leaveHub(), []);
 
-		const scene = new FarmMapScene(
-			target,
-			isOwner,
-			setTravelPrompt,
-			setArea,
-			() => {
-				scene.setOverlayPaused(true);
-				setFishingOpen(true);
-			},
-		);
-		scene.onFarmUpdate = (snapshot) => {
-			if (cancelled) return;
-			setHud(snapshot);
-			setEngineReady(true);
-		};
-		sceneRef.current = scene;
-		engine.addScene("farm-map", scene);
-		const marketplace = new MarketplaceScene(setTravelPrompt, setArea, (id) => {
-			marketplace.setPaused(true);
-			setMarketMessage(null);
-			setMarket(id);
-		});
-		marketSceneRef.current = marketplace;
-		engine.addScene("marketplace", marketplace);
-		function openCasino(overlay: CasinoOverlay) {
-			casino.setPaused(true);
-			setCasinoOverlay(overlay);
-		}
-		const casino = new CasinoScene(
-			setTravelPrompt,
-			setArea,
-			() => openCasino("blackjack"),
-			() => openCasino("poker"),
-			() => openCasino("roulette"),
-			() => openCasino("slots"),
-		);
-		casinoRef.current = casino;
-		engine.addScene("casino", casino);
-		void Promise.all(worldResources.map((resource) => resource.load())).then(
-			async () => {
-				if (cancelled) return;
-				await engine.start();
-				if (cancelled) return;
-				await engine.goToScene("farm-map");
-			},
-		);
-
-		return () => {
-			cancelled = true;
-			sceneRef.current = null;
-			marketSceneRef.current = null;
-			casinoRef.current = null;
-			engine.stop();
-			engine.dispose();
-		};
-	}, [target, isOwner, setMarket, setMarketMessage]);
+	useWorldEngine({
+		canvasRef,
+		engineRef,
+		sceneRef,
+		marketSceneRef,
+		casinoRef,
+		livestockRef,
+		bankRef,
+		target,
+		isOwner,
+		setTravelPrompt,
+		setArea,
+		setHud,
+		setEngineReady,
+		setMarket,
+		setMarketMessage,
+		selectAnimal,
+		setLivestockMessage,
+		setBankDesk,
+		setCasinoOverlay,
+		setFishingOpen,
+		openHouseMenu,
+		openFarmTravelMenu,
+		openMarketplaceTravelMenu,
+	});
 
 	// Route farm hints and errors into the bottom-left feed.
 	useEffect(() => {
@@ -243,8 +190,9 @@ export default function FarmMap() {
 			setPaused(false);
 			setInventoryOpen(false);
 			setFishingOpen(false);
+			closeHouseMenu();
 		};
-	}, [setPaused, setInventoryOpen]);
+	}, [setPaused, setInventoryOpen, closeHouseMenu]);
 
 	function handleCloseMarket() {
 		closeMarket();
@@ -254,6 +202,18 @@ export default function FarmMap() {
 	function closeCasinoOverlay() {
 		casinoRef.current?.setPaused(false);
 		setCasinoOverlay(null);
+	}
+
+	function closeLivestockPurchase() {
+		if (livestock.busy) return;
+		livestockRef.current?.setPaused(false);
+		livestock.select(null);
+		livestock.setMessage(null);
+	}
+
+	function closeBank() {
+		bankRef.current?.setPaused(false);
+		setBankDesk(null);
 	}
 
 	function closeFishing() {
@@ -270,6 +230,8 @@ export default function FarmMap() {
 		<main
 			className="farm-map-page"
 			data-world-ready={worldReady ? "true" : "false"}
+			data-hub-peers={hubPeers.join(",")}
+			data-farm-peers={farmPeers.join(",")}
 		>
 			<canvas
 				ref={canvasRef}
@@ -284,6 +246,18 @@ export default function FarmMap() {
 					onClose={handleCloseMarket}
 				/>
 			)}
+			{livestock.pen && (
+				<LivestockPurchaseOverlay
+					pen={livestock.pen}
+					owned={farm?.animals?.[livestock.pen.id] ?? 0}
+					isOwner={isOwner}
+					busy={livestock.busy}
+					message={livestock.message}
+					onBuy={livestock.buy}
+					onClose={closeLivestockPurchase}
+				/>
+			)}
+			{bankDesk && <BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />}
 			{travelPrompt && (
 				<div className="farm-map-travel-prompt" data-testid="travel-prompt">
 					{travelPrompt}
@@ -305,6 +279,10 @@ export default function FarmMap() {
 			<ComboCounter />
 			<InventoryPanel />
 			{paused && <PauseMenu />}
+			{houseOpen && isOwner && farm && (
+				<HouseMenu owner={target ?? ""} farm={farm} onClose={closeHouseMenu} />
+			)}
+			<TravelMenu />
 			{fishingOpen && <FishingOverlay onClose={closeFishing} />}
 			<CasinoOverlays open={casinoOverlay} onClose={closeCasinoOverlay} />
 		</main>

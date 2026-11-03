@@ -3,14 +3,17 @@ import { MAP_COLUMNS, MAP_ROWS } from "../src/world/mapData";
 
 export const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3201";
 
+/**
+ * Budget for a train ride. Departure and arrival animate for two seconds of
+ * game time, and a loaded runner still takes longer than wall clock to paint
+ * those frames, so a ride gets a generous budget instead of Playwright's 5s
+ * default. Scene-change assertions after a ride use this.
+ */
+export const TRAVEL_TIMEOUT = 30_000;
+
 /** Unique suffix so tests don't collide with each other or prior runs. */
 export function uniqueName(base: string): string {
 	return `${base}-${Math.floor(Math.random() * 1e9)}`;
-}
-
-/** Resets the server's in-memory state so each test starts clean. */
-export async function resetServer(): Promise<void> {
-	await fetch(`${BASE}/api/reset`, { method: "POST" });
 }
 
 /**
@@ -20,7 +23,6 @@ export async function resetServer(): Promise<void> {
  */
 export async function waitForWorld(page: Page): Promise<void> {
 	await page.locator("canvas.farm-map-canvas").waitFor({ state: "visible" });
-	await page.waitForLoadState("networkidle");
 	// The Excalibur engine starts asynchronously after the canvas mounts, so
 	// wait for the world to report that it is actually interactive before any
 	// keyboard-driven test acts on it.
@@ -71,6 +73,32 @@ export async function register(
 	return username;
 }
 
+/**
+ * Registers through the auth API and lands on the farm map.
+ *
+ * `page.request` shares the context's cookie jar, so the session cookie set by
+ * the response belongs to the page; the next navigation resolves it and the
+ * socket handshake picks up the token. Use the UI `register` in auth tests —
+ * everything else only needs an account, and the form costs a second per test.
+ */
+export async function registerFast(
+	page: Page,
+	username: string,
+	password = "harvest-please",
+): Promise<string> {
+	const response = await page.request.post(`${BASE}/api/auth/register`, {
+		data: { username, email: `${username}@example.test`, password },
+	});
+	if (!response.ok()) {
+		throw new Error(
+			`registering ${username} failed: ${response.status()} ${await response.text()}`,
+		);
+	}
+	await page.goto(`${BASE}/world`);
+	await waitForWorld(page);
+	return username;
+}
+
 /** Registers an account then signs in, leaving the page on the farm map. */
 export async function login(
 	page: Page,
@@ -90,11 +118,61 @@ export async function login(
 	await enterFarm(page);
 }
 
+/** How often a held walk re-sends its keydown while waiting. */
+const HOLD_REPEAT_MS = 250;
+
+/**
+ * Reads the travel prompt without waiting for it to exist.
+ *
+ * `locator.textContent()` blocks until the element is attached, and the prompt
+ * is only rendered while something is in reach — so polling with the locator
+ * would stall the walk loop (and its timeout) whenever the player is between
+ * prompts. `fallback` keeps the last non-null reading across a navigation.
+ */
+async function readTravelPrompt(
+	page: Page,
+	fallback: string | null,
+): Promise<string | null> {
+	return page
+		.evaluate(() => {
+			const prompt = document.querySelector('[data-testid="travel-prompt"]');
+			return prompt?.textContent ?? null;
+		})
+		.catch(() => fallback);
+}
+
+/**
+ * Presses the movement keys and keeps them held for `ms`.
+ *
+ * The keys are re-sent every `HOLD_REPEAT_MS` because a keydown delivered
+ * while a scene is paused — right after an overlay closes — is dropped, which
+ * would otherwise leave the player standing still for the whole hold.
+ */
+export async function holdKeys(
+	page: Page,
+	keys: string[],
+	ms: number,
+): Promise<void> {
+	const deadline = Date.now() + ms;
+	for (const key of keys) await page.keyboard.down(key);
+	try {
+		for (;;) {
+			const left = deadline - Date.now();
+			if (left <= 0) return;
+			await page.waitForTimeout(Math.min(HOLD_REPEAT_MS, left));
+			for (const key of keys) await page.keyboard.down(key);
+		}
+	} finally {
+		for (const key of keys) await page.keyboard.up(key);
+	}
+}
+
 /**
  * Holds the given movement keys until the travel prompt contains `text`, then
  * releases them. Polling while moving keeps navigation reliable on slow CI
- * runners: Excalibur clamps per-frame delta, so a fixed hold covers less
- * ground there and the player can stop short of the interaction radius.
+ * runners, where a fixed hold covers less ground than it does locally, and the
+ * hold is re-asserted so a keydown dropped during a scene transition cannot
+ * strand the player.
  */
 export async function walkUntilPrompt(
 	page: Page,
@@ -102,57 +180,164 @@ export async function walkUntilPrompt(
 	text: string,
 	timeout = 10_000,
 ): Promise<void> {
-	const prompt = page.getByTestId("travel-prompt");
+	const deadline = Date.now() + timeout;
 	for (const key of keys) await page.keyboard.down(key);
 	try {
-		await expect(prompt).toContainText(text, { timeout });
+		let last: string | null = null;
+		for (;;) {
+			// Re-sending the hold is harmless and covers a dropped keydown.
+			for (const key of keys) await page.keyboard.down(key);
+			last = await readTravelPrompt(page, last);
+			if (last?.includes(text)) return;
+			if (Date.now() >= deadline) {
+				throw new Error(
+					`walking with ${JSON.stringify(keys)} never reached ${JSON.stringify(
+						text,
+					)} in ${timeout}ms; the prompt reads ${JSON.stringify(last)}`,
+				);
+			}
+			await page.waitForTimeout(HOLD_REPEAT_MS);
+		}
 	} finally {
 		for (const key of keys) await page.keyboard.up(key);
 	}
 }
 
 /** Waits for the arriving train to park so the player can move again. The
- * marketplace spawn sits beside the train, so its prompt appears once idle. */
-export async function waitForTrainStop(page: Page): Promise<void> {
+ * spawn sits beside the train, so its boarding prompt appears once idle. */
+export async function waitForTrainStop(
+	page: Page,
+	timeout = TRAVEL_TIMEOUT,
+): Promise<void> {
 	await expect(page.getByTestId("travel-prompt")).toContainText(
-		"return to the farm",
+		"board the train",
+		{ timeout },
 	);
 }
 
 /**
- * Walks from the marketplace spawn to the seed market door. Heads north first
- * into the clear lane between the shop fronts (bottom y=300) and the stall
- * tops (y~450), then walks straight west until the seed prompt shows. A
- * straight-west walk avoids wedging diagonally into the produce-cart/barrel
- * row and ends stopped inside the prompt radius instead of streaking through
- * it on a diagonal.
+ * Boards the parked train and picks a destination from the menu.
+ * `destinationId` is a `TravelDestination.id` such as `marketplace`,
+ * `home`, or `farm-Alice`.
+ */
+export async function rideTrain(
+	page: Page,
+	destinationId: string,
+): Promise<void> {
+	await page.keyboard.press("e");
+	await page.getByTestId("travel-menu").waitFor({ state: "visible" });
+	await page.getByTestId(`travel-option-${destinationId}`).click();
+}
+
+/**
+ * Walks from the marketplace spawn to the seed market door.
+ *
+ * The shops share one front row: their fronts stop a northbound player at the
+ * same height, and the lane just below that row runs clear all the way west to
+ * the seed door. So the route is "north until the shop row, then west".
+ *
+ * The casino doorway sits on that row and is the only prompt on the climb, so
+ * its prompt is the anchor that says the player is at the right height; a
+ * short extra hold then puts the player in the lane (the shop fronts dead-end
+ * both movements, so overshooting cannot miss the lane). A single timed north
+ * hold is what used to break: on a loaded runner it covered less ground and
+ * left the player below the lane, wedged on the produce cart.
  */
 export async function walkToSeedMarket(
 	page: Page,
 	timeout = 20_000,
 ): Promise<void> {
-	await page.keyboard.down("w");
-	await page.waitForTimeout(1_300);
-	await page.keyboard.up("w");
+	await walkUntilPrompt(page, ["w"], "enter the casino", TRAVEL_TIMEOUT);
+	await holdKeys(page, ["w"], 1_500);
 	await walkUntilPrompt(page, ["a"], "enter the seed market", timeout);
+}
+
+/** Walks from the farm spawn onto the marketplace platform. */
+export async function enterMarketplace(page: Page): Promise<void> {
+	const canvas = page.locator("canvas");
+
+	// Hub specs drive two pages, so make sure this one owns the keyboard before
+	// walking (Playwright's guidance for multi-page tests).
+	await page.bringToFront();
+	// Keep walking until the prompt appears rather than holding for a fixed
+	// time: the map is wide, and a busy runner paints fewer frames per second,
+	// so a timed hold covers less ground there than it does locally.
+	await walkUntilPrompt(
+		page,
+		["d"],
+		"board the train",
+		TRAVEL_TIMEOUT,
+	);
+	await rideTrain(page, "marketplace");
+	// The scene only switches once the train has finished departing, so allow a
+	// loaded runner plenty of time (see TRAVEL_TIMEOUT).
+	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/, {
+		timeout: TRAVEL_TIMEOUT,
+	});
+	await waitForTrainStop(page);
 }
 
 /** Walks from the farm spawn through the marketplace and into the casino. */
 export async function walkToCasino(page: Page): Promise<void> {
 	const canvas = page.locator("canvas");
-	const prompt = page.getByTestId("travel-prompt");
 
-	await page.keyboard.down("d");
-	await page.waitForTimeout(1_000);
-	await page.keyboard.up("d");
-	await expect(prompt).toContainText("travel to the marketplace");
-	await page.keyboard.press("e");
-	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/);
-	await waitForTrainStop(page);
+	await enterMarketplace(page);
 
-	await walkUntilPrompt(page, ["w"], "enter the casino");
+	await walkUntilPrompt(page, ["w"], "enter the casino", TRAVEL_TIMEOUT);
 	await page.keyboard.press("e");
-	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/);
+	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/, {
+		timeout: TRAVEL_TIMEOUT,
+	});
+}
+
+/** Waits until the player's hub area lists `name` as another player. */
+export async function waitForHubPeer(page: Page, name: string): Promise<void> {
+	await expect
+		.poll(async () => hubPeerList(page), { timeout: 10_000 })
+		.toContain(name);
+}
+
+/** Waits until the player's hub area no longer lists `name`. */
+export async function waitForHubPeerGone(
+	page: Page,
+	name: string,
+): Promise<void> {
+	await expect
+		.poll(async () => hubPeerList(page), { timeout: 10_000 })
+		.not.toContain(name);
+}
+
+/** The comma-separated peer names the world exposes for tests. */
+export async function hubPeerList(page: Page): Promise<string> {
+	const value = await page
+		.locator(".farm-map-page")
+		.getAttribute("data-hub-peers");
+	return value ?? "";
+}
+
+/** Waits until the farm lists `name` as another person standing on it. */
+export async function waitForFarmPeer(page: Page, name: string): Promise<void> {
+	await expect
+		.poll(async () => farmPeerList(page), { timeout: 15_000 })
+		.toContain(name);
+}
+
+/** Waits until a farm no longer lists `name`. */
+export async function waitForFarmPeerGone(
+	page: Page,
+	name: string,
+): Promise<void> {
+	await expect
+		.poll(async () => farmPeerList(page), { timeout: 15_000 })
+		.not.toContain(name);
+}
+
+/** The comma-separated visitor names a farm exposes for tests. */
+export async function farmPeerList(page: Page): Promise<string> {
+	const value = await page
+		.locator(".farm-map-page")
+		.getAttribute("data-farm-peers");
+	return value ?? "";
 }
 
 /**

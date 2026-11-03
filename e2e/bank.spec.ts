@@ -1,0 +1,44 @@
+import { expect, test } from "@playwright/test";
+import {
+	registerFast,
+	rideTrain,
+	TRAVEL_TIMEOUT,
+	uniqueName,
+	waitForTrainStop,
+	walkUntilPrompt,
+} from "./helpers";
+
+test("the bank has teller and mayor desks, with saved money and land purchases", async ({
+	page,
+}) => {
+	await registerFast(page, uniqueName("Banker"));
+	const canvas = page.locator("canvas.farm-map-canvas");
+
+	await walkUntilPrompt(page, ["d"], "board the train");
+	await rideTrain(page, "marketplace");
+	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/, {
+		timeout: TRAVEL_TIMEOUT,
+	});
+	await waitForTrainStop(page);
+
+	await walkUntilPrompt(page, ["d"], "enter the bank", 15_000);
+	await page.keyboard.press("e");
+	await expect(canvas).toHaveAttribute("aria-label", /^Bank map/);
+
+	await walkUntilPrompt(page, ["w", "a"], "talk to bank teller", 15_000);
+	await page.keyboard.press("e");
+	const teller = page.getByRole("dialog", { name: "Talk to bank teller" });
+	await expect(teller).toBeVisible();
+	await teller.getByLabel("Amount").fill("20");
+	await teller.getByRole("button", { name: "Deposit" }).click();
+	await expect(teller).toContainText("Savings: $20");
+	await teller.getByRole("button", { name: "Withdraw" }).click();
+	await expect(teller).toContainText("Savings: $0");
+	await page.keyboard.press("Escape");
+
+	await walkUntilPrompt(page, ["d"], "talk to mayor", 15_000);
+	await page.keyboard.press("e");
+	const mayor = page.getByRole("dialog", { name: "Talk to mayor" });
+	await expect(mayor).toContainText("Next parcel: $250");
+	await expect(mayor.getByRole("button", { name: "Buy land" })).toBeDisabled();
+});

@@ -10,7 +10,7 @@ import { emitFarmAction, type FarmActionAck } from "../socket";
 import { useGameStore } from "../store";
 import type { ComboController } from "./farmCombo";
 import { type ActionPlan, maybeSpread, resolveAction } from "./farmActions";
-import { isTillableTile, TILE_SIZE } from "./mapData";
+import { isTillableTile, ownsFarmTile, TILE_SIZE } from "./mapData";
 import type { SweepFx } from "./sweepFx";
 
 /** Scene callbacks so the runner stays free of Excalibur specifics. */
@@ -37,6 +37,10 @@ export function performFarmAction(
 	const inventory = useInventoryStore.getState();
 	const item = inventory.hotbar[inventory.selectedHotbar]?.itemId ?? null;
 	const tool = farmToolForItem(item);
+	if (tool === "hoe" && !tile && !ownsFarmTile(column, row, farm?.land_level ?? 0)) {
+		feedback.message("Buy this land from the mayor first.");
+		return;
+	}
 	if (!tool) {
 		feedback.message("Select a tool or item first.");
 		return;

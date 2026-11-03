@@ -21,6 +21,7 @@ defmodule Grange.Inventory do
   }
 
   @seed_items ~w(seed-bag wheat-seed lettuce-seed midas-wheat-seed frost-lettuce-seed sunburst-tomato-seed)
+  @animal_items ~w(cow hen sheep pig)
   @starter %{"seed-bag" => 10}
   @max_stack 99
   @hotbar_size 10
@@ -123,6 +124,7 @@ defmodule Grange.Inventory do
   def save_layout(owner, slots) when is_list(slots) do
     with {:ok, normalized} <- normalize_slots(slots),
          :ok <- validate_seed_totals(owner, normalized),
+         :ok <- validate_animal_totals(owner, normalized),
          :ok <- replace_layout(owner, normalized) do
       {:ok, layout(owner)}
     end
@@ -297,6 +299,23 @@ defmodule Grange.Inventory do
       _slot, totals ->
         totals
     end)
+  end
+
+  defp validate_animal_totals(owner, slots) do
+    farm = Repo.get(FarmRecord, owner)
+    owned = if farm, do: farm.animals, else: %{}
+
+    actual =
+      slots |> Enum.filter(&(&1.item in @animal_items)) |> Enum.group_by(& &1.item, & &1.count)
+
+    valid? =
+      Enum.all?(@animal_items, &(Enum.sum(Map.get(actual, &1, [])) <= Map.get(owned, &1, 0)))
+
+    if valid? do
+      :ok
+    else
+      {:error, "animal count mismatch"}
+    end
   end
 
   defp value(map, key), do: Map.get(map, key) || Map.get(map, String.to_atom(key))

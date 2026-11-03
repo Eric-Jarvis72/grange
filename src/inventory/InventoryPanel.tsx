@@ -62,8 +62,8 @@ export function InventoryPanel() {
 							))}
 						</section>
 						<p className="inv-hint">
-							Drag to move · stacks merge · right-click a stack to split
-							half
+							Drag or shift-click to move · stacks merge · right-click a stack
+							to split half
 						</p>
 					</div>
 				</div>

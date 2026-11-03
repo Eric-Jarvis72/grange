@@ -8,7 +8,8 @@ defmodule Grange.Application do
     children =
       [
         {Phoenix.PubSub, name: Grange.PubSub},
-        Grange.Repo
+        Grange.Repo,
+        GrangeWeb.Presence
       ] ++
         ticker_children() ++
         [GrangeWeb.Endpoint]

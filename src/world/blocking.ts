@@ -1,6 +1,4 @@
 import {
-	MAP_COLUMNS,
-	MAP_ROWS,
 	TILE_SIZE,
 	propBlocking,
 	type MapProp,
@@ -27,16 +25,16 @@ export function rectFootprintTiles(
 ): TileCoord[] {
 	const tiles: TileCoord[] = [];
 	const left = Math.max(
-		0,
+		-2,
 		Math.floor((x - width / 2) / TILE_SIZE),
 	);
 	const right = Math.min(
-		MAP_COLUMNS - 1,
+		19,
 		Math.floor((x + width / 2 - 0.001) / TILE_SIZE),
 	);
-	const top = Math.max(0, Math.floor((y - height) / TILE_SIZE));
+	const top = Math.max(-4, Math.floor((y - height) / TILE_SIZE));
 	const bottom = Math.min(
-		MAP_ROWS - 1,
+		11,
 		Math.floor((y - 0.001) / TILE_SIZE),
 	);
 	for (let row = top; row <= bottom; row += 1) {

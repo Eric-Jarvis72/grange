@@ -6,6 +6,16 @@ export interface Player {
 	name: string;
 }
 
+/** The shared, multiplayer areas of the hub world. Farms are not hubs. */
+export type HubArea = "marketplace" | "casino";
+
+/** Another player standing in the same hub area. */
+export interface HubPeer {
+	name: string;
+	x: number;
+	y: number;
+}
+
 /** One tile of a farm's field, as sent by the server. */
 export interface FarmTile {
 	x: number;
@@ -36,11 +46,24 @@ export interface ActiveFarm {
 	tomatoes: number;
 	/** Produce held per produce item id (crop id), e.g. `{ tomato: 3 }`. */
 	barn: Record<string, number>;
+	/** Livestock owned by this farm, keyed by animal species. */
+	animals: Record<string, number>;
+	land_level?: number;
+	/** Whether strangers may join this farm. */
+	is_public: boolean;
+	/** Whether visitors may farm, build fences/gates, and move props. */
+	visitor_edit: boolean;
 	fences: Array<{ x: number; y: number }>;
 	fence_count: number;
 	gates: FenceGate[];
 	gate_count: number;
-	prop_overrides: Array<{ index: number; asset: string; x: number; y: number; carried: boolean }>;
+	prop_overrides: Array<{
+		index: number;
+		asset: string;
+		x: number;
+		y: number;
+		carried: boolean;
+	}>;
 	prop_inventory: Record<string, number>;
 }
 
@@ -63,6 +86,8 @@ export interface FarmSummary {
 	watered: number;
 	ready: number;
 	tomatoes: number;
+	/** Whether the farm currently accepts visitors. */
+	is_public: boolean;
 }
 
 /** A player's request to act on a tile of their own farm. */
