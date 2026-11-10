@@ -11,8 +11,9 @@ export default defineConfig({
 	fullyParallel: true,
 	// Two workers is the sweet spot: the farm scene is canvas-heavy, and a
 	// faster local machine started at its own core count just saturates the
-	// CPU and makes every walk slower than it would be with two.
-	workers: 2,
+	// CPU and makes every walk slower than it would be with two. CI can raise
+	// it with E2E_WORKERS without editing this file.
+	workers: Number(process.env.E2E_WORKERS ?? 2),
 	// Generous per-test budget: scene changes animate in game time, so a loaded
 	// runner needs more than the default 30s on the longest trips.
 	timeout: 90_000,
@@ -29,6 +30,18 @@ export default defineConfig({
 		url: BASE_URL,
 		reuseExistingServer: true,
 		timeout: 120_000,
-		env: { PORT, MIX_ENV: "dev" },
+		env: {
+			PORT,
+			MIX_ENV: "dev",
+			// dev.exs turns these into `:grow_ms` and the farm tick interval.
+			// Crops ripen in 100ms and the ticker sweeps every 100ms, so a spec
+			// never waits on the 1s production tick. The meta tag the shell
+			// injects in dev also enables the SPA's `?area=` boot and 3x walk
+			// speed.
+			GRANGE_GROW_MS: process.env.GRANGE_GROW_MS ?? "100",
+			GRANGE_TICK_MS: process.env.GRANGE_TICK_MS ?? "100",
+			// Argon2 is deliberately slow in dev; e2e registers ~50 accounts.
+			GRANGE_FAST_HASH: "1",
+		},
 	},
 });

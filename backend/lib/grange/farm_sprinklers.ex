@@ -6,6 +6,10 @@ defmodule Grange.FarmSprinklers do
   covers; the object itself is drawn on the corner those tiles share. While a
   sprinkler stands, a planted tile in its square is watered on the next tick,
   so a seed planted under a sprinkler never needs a watering can.
+
+  A sprinkler also keeps bare tilled soil moist: `Grange.FarmTick` never lets a
+  covered `tilled` tile dry out, and arriving/leaving restamps its drying clock
+  so removing a sprinkler starts a fresh window rather than reverting at once.
   """
 
   import Ecto.Query
@@ -31,6 +35,38 @@ defmodule Grange.FarmSprinklers do
     Repo.one(from(s in FarmSprinkler, where: s.owner == ^owner and s.x == ^x and s.y == ^y))
   end
 
+  @doc """
+  Every tile coordinate covered by a sprinkler, as `{owner, x, y}`.
+
+  Used by `Grange.FarmTick` to spare covered tilled soil from the drying sweep.
+  """
+  @spec covered_coords() :: MapSet.t({String.t(), integer(), integer()})
+  def covered_coords do
+    from(s in FarmSprinkler, select: {s.owner, s.x, s.y})
+    |> Repo.all()
+    |> Enum.reduce(MapSet.new(), fn {owner, x, y}, acc ->
+      Enum.reduce(@coverage, acc, fn {dx, dy}, inner ->
+        MapSet.put(inner, {owner, x + dx, y + dy})
+      end)
+    end)
+  end
+
+  @doc """
+  Restamps the drying clock of bare tilled soil in a sprinkler's square.
+
+  Called when a sprinkler arrives or leaves so its soil always gets a full
+  `Grange.Farm.till_decay_ms/0` window from the moment it is last moistened.
+  """
+  @spec moisten_soil(String.t(), integer(), integer(), integer()) :: :ok
+  def moisten_soil(owner, x, y, now) do
+    Enum.each(@coverage, fn {dx, dy} ->
+      case tile_at(owner, x + dx, y + dy) do
+        %Tile{state: :tilled} = tile -> Repo.update!(Ecto.Changeset.change(tile, tilled_at: now))
+        _other -> :ok
+      end
+    end)
+  end
+
   @doc "Places or lifts a sprinkler; the action kind picks the direction."
   @spec action(String.t(), atom(), integer(), integer()) :: :ok | {:error, String.t()}
   def action(owner, :place_sprinkler, x, y), do: place(owner, x, y)
@@ -54,6 +90,7 @@ defmodule Grange.FarmSprinklers do
       true ->
         Repo.insert!(%FarmSprinkler{owner: owner, x: x, y: y})
         Repo.update!(Ecto.Changeset.change(farm, sprinkler_count: farm.sprinkler_count - 1))
+        moisten_soil(owner, x, y, now_ms())
         :ok
     end
   end
@@ -69,6 +106,7 @@ defmodule Grange.FarmSprinklers do
         Repo.delete!(sprinkler)
         farm = Repo.get!(FarmRecord, owner)
         Repo.update!(Ecto.Changeset.change(farm, sprinkler_count: farm.sprinkler_count + 1))
+        moisten_soil(owner, x, y, now_ms())
         :ok
     end
   end
@@ -108,4 +146,6 @@ defmodule Grange.FarmSprinklers do
   defp tile_at(owner, x, y) do
     Repo.one(from(t in Tile, where: t.owner == ^owner and t.x == ^x and t.y == ^y))
   end
+
+  defp now_ms, do: System.system_time(:millisecond)
 end

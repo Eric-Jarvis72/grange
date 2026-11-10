@@ -45,7 +45,8 @@ defmodule Grange.FieldWater do
       crop: changed.crop,
       planted_at: changed.planted_at,
       watered_at: changed.watered_at,
-      ready_at: changed.ready_at
+      ready_at: changed.ready_at,
+      tilled_at: nil
     })
     |> Repo.update!()
 

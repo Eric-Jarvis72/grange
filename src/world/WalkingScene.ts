@@ -15,9 +15,20 @@ import { InputManager } from "./InputManager";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import { updateWalkingPlayer } from "./playerMovement";
 import type { WalkObstacle } from "./walkCollisions";
+import { ensureSceneResources } from "./worldAssets";
 
-export type WorldArea = "Farm" | "Marketplace" | "Casino" | "Livestock Market" | "Bank";
-export type WorldSceneName = "farm-map" | "marketplace" | "casino" | "livestock-market" | "bank";
+export type WorldArea =
+	| "Farm"
+	| "Marketplace"
+	| "Casino"
+	| "Livestock Market"
+	| "Bank";
+export type WorldSceneName =
+	| "farm-map"
+	| "marketplace"
+	| "casino"
+	| "livestock-market"
+	| "bank";
 
 export interface SceneSpawn {
 	x: number;
@@ -162,8 +173,14 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 			this.options.worldWidth,
 		);
 		if (this.options.worldWidth && this.options.worldWidth > MAP_WIDTH)
-			this.camera.pos = ex.vec(ex.clamp(this.player.pos.x, MAP_WIDTH / 2,
-				this.options.worldWidth - MAP_WIDTH / 2), MAP_HEIGHT / 2);
+			this.camera.pos = ex.vec(
+				ex.clamp(
+					this.player.pos.x,
+					MAP_WIDTH / 2,
+					this.options.worldWidth - MAP_WIDTH / 2,
+				),
+				MAP_HEIGHT / 2,
+			);
 		updateFarmerGraphics(this.player, direction);
 		if (this.options.hubArea) {
 			publishHubPosition(this.player.pos.x, this.player.pos.y);
@@ -193,8 +210,15 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		engine: ex.Engine,
 		interaction: SceneInteraction,
 	): Promise<void> {
+		if (!interaction.destination) {
+			if (interaction.onTravel) await interaction.onTravel();
+			return;
+		}
+		// Warm the destination while the departure animation plays, so a fast
+		// player never lands in a scene whose art has not loaded yet.
+		const assets = ensureSceneResources(interaction.destination);
 		if (interaction.onTravel) await interaction.onTravel();
-		if (!interaction.destination) return;
+		await assets;
 		await engine.goToScene(interaction.destination, {
 			sceneActivationData: {
 				spawn: interaction.destinationSpawn,

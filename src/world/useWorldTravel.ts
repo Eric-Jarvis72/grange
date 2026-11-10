@@ -1,17 +1,18 @@
 import type * as ex from "excalibur";
-import { useCallback, useEffect, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useGameStore } from "../store";
 import type { FarmMapScene } from "./FarmMapScene";
-import { FARM_TRAIN_ARRIVAL_SPAWN } from "./mapData";
 import type { MarketplaceScene } from "./MarketplaceScene";
+import { FARM_TRAIN_ARRIVAL_SPAWN } from "./mapData";
 import { markTrainArrival } from "./trainArrival";
 import {
-	trainDestinations,
 	type TrainLocation,
 	type TravelDestination,
+	trainDestinations,
 } from "./travelDestinations";
 import { useTravelMenuStore } from "./travelMenuStore";
+import { ensureSceneResources } from "./worldAssets";
 
 interface WorldTravelOptions {
 	target: string | undefined;
@@ -52,6 +53,7 @@ export function useWorldTravel({
 
 			if (destination.kind === "marketplace") {
 				if (target === username) {
+					await ensureSceneResources("marketplace");
 					await engineRef.current?.goToScene("marketplace", {
 						sceneActivationData: { trainArriving: true },
 					});
@@ -64,6 +66,7 @@ export function useWorldTravel({
 
 			if (destination.kind === "home") {
 				if (target === username) {
+					await ensureSceneResources("farm-map");
 					await engineRef.current?.goToScene("farm-map", {
 						sceneActivationData: {
 							spawn: FARM_TRAIN_ARRIVAL_SPAWN,

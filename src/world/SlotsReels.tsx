@@ -6,11 +6,13 @@ import {
 	symbolDef,
 } from "./slots";
 import type { SlotsPhase } from "./slotsTypes";
+import { e2eMs } from "./testMode";
 
-/** How long the reels spin before the result is revealed, in ms. */
-export const SPIN_MS = 1800;
+/** How long the reels spin before the result is revealed, in ms. E2E shortens
+ * the animation; the settled faces are what a spec asserts. */
+export const SPIN_MS = e2eMs(1_800, 500);
 /** How fast the faces flash while spinning, in ms. */
-const TICK_MS = 70;
+const TICK_MS = e2eMs(70, 40);
 
 /** Faces shown before the first spin. */
 const IDLE_FACES: SlotSymbol[] = ["cherry", "bell", "diamond"];

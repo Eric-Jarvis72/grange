@@ -31,6 +31,7 @@ defmodule Grange.FarmStore do
     FarmSettings,
     FarmSprinkler,
     FarmSprinklers,
+    FarmTick,
     FarmView,
     FieldWater,
     Inventory,
@@ -147,18 +148,7 @@ defmodule Grange.FarmStore do
 
   @spec tick(integer()) :: [String.t()]
   def tick(now \\ System.system_time(:millisecond)) do
-    sprinkled = FarmSprinklers.water_tick(now)
-
-    ready =
-      Repo.all(
-        from(t in Tile,
-          where: t.state == :watered and not is_nil(t.ready_at) and t.ready_at <= ^now
-        )
-      )
-
-    Enum.each(ready, &Repo.update!(Ecto.Changeset.change(&1, state: :ready)))
-
-    owners = Enum.uniq(sprinkled ++ (ready |> Enum.map(& &1.owner))) |> Enum.sort()
+    owners = FarmTick.run(now)
     Enum.each(owners, &broadcast_farm/1)
     if owners != [], do: broadcast_lobby()
     owners
@@ -216,7 +206,7 @@ defmodule Grange.FarmStore do
   defp mutate(owner, _actor, :till, x, y, _opts) do
     case tile_at(owner, x, y) do
       nil ->
-        %Tile{}
+        %Tile{tilled_at: now_ms()}
         |> Tile.changeset(%{owner: owner, x: x, y: y, state: :tilled, crop: "tomato"})
         |> Repo.insert!()
 
@@ -303,7 +293,8 @@ defmodule Grange.FarmStore do
         state: :watered,
         crop: Crops.encode_crop(crop_id, remaining - 1),
         watered_at: now,
-        ready_at: now + round(Farm.grow_ms() / speed)
+        ready_at: now + round(Farm.grow_ms() / speed),
+        tilled_at: nil
       })
       |> Repo.update!()
 
@@ -323,7 +314,8 @@ defmodule Grange.FarmStore do
       crop: changed.crop,
       planted_at: changed.planted_at,
       watered_at: changed.watered_at,
-      ready_at: changed.ready_at
+      ready_at: changed.ready_at,
+      tilled_at: if(changed.state == :tilled, do: now_ms(), else: nil)
     })
     |> Repo.update!()
 

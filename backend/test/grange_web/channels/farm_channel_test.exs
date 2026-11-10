@@ -2,34 +2,16 @@ defmodule GrangeWeb.FarmChannelTest do
   @moduledoc false
   use GrangeWeb.ChannelCase
 
-  alias Grange.{Accounts, Farm, FarmRecord, FarmStore, Inventory, Repo}
+  import Grange.FarmFixtures
+
+  alias Grange.{Accounts, Farm, FarmStore, Inventory}
   alias GrangeWeb.ChannelCase, as: Helper
   alias GrangeWeb.Presence
 
   setup do
     Accounts.reset()
-    FarmStore.reset()
+    reset_farm_state()
     :ok
-  end
-
-  defp full_farm(owner) do
-    FarmStore.ensure(owner)
-
-    Repo.get!(FarmRecord, owner)
-    |> Ecto.Changeset.change(land_level: 4)
-    |> Repo.update!()
-
-    FarmStore.view(owner)
-  end
-
-  defp public_farm(owner) do
-    full_farm(owner)
-    {:ok, _farm} = FarmStore.update_settings(owner, %{"is_public" => true})
-  end
-
-  defp editable_farm(owner) do
-    public_farm(owner)
-    {:ok, _farm} = FarmStore.update_settings(owner, %{"visitor_edit" => true})
   end
 
   defp signed_socket(username) do

@@ -1,47 +1,27 @@
 import { expect, test } from "@playwright/test";
 import {
-	TRAVEL_TIMEOUT,
+	expectArea,
 	holdKeys,
 	registerFast,
 	uniqueName,
-	walkToCasino,
+	useDoor,
 	walkUntilPrompt,
 } from "./helpers";
 
 /**
- * One trip to the casino covers all four tables. Each table used to re-walk
- * farm -> marketplace -> casino in its own spec file, which cost more than the
- * game it was testing.
+ * Each table is its own deep-linked test. Booting straight into the casino
+ * keeps the navigation cost in `journey.spec.ts` instead of paying for it four
+ * times, and one account per table keeps each wallet independent.
  */
-test("the casino tables open playable sub-screens", async ({ page }) => {
-	test.setTimeout(180_000);
-	await registerFast(page, uniqueName("Highroller"));
-	const canvas = page.locator("canvas");
+const CASINO = { area: "casino" } as const;
 
-	await walkToCasino(page);
-
-	// The doorway back out sits just above the spawn: leave, land at the
-	// marketplace's casino door (inside its prompt radius), and walk back in.
-	// Doing it first keeps it to two key presses instead of a long hike back
-	// across the room at the end.
-	await expect(page.getByTestId("travel-prompt")).toContainText(
-		"leave the casino",
-	);
-	await page.keyboard.press("e");
-	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/, {
-		timeout: TRAVEL_TIMEOUT,
-	});
-	await expect(page.getByTestId("travel-prompt")).toContainText(
-		"enter the casino",
-	);
-	await page.keyboard.press("e");
-	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/, {
-		timeout: TRAVEL_TIMEOUT,
-	});
+test("blackjack deals a hand", async ({ page }) => {
+	await registerFast(page, uniqueName("Dealer"), CASINO);
 
 	// Blackjack sits straight down from the casino spawn.
 	await walkUntilPrompt(page, ["s"], "play blackjack");
-	await page.keyboard.press("e");
+	await useDoor(page);
+
 	const blackjack = page.getByTestId("blackjack-overlay");
 	await expect(blackjack).toBeVisible();
 	await expect(page.getByTestId("blackjack-balance")).toContainText("100");
@@ -52,23 +32,28 @@ test("the casino tables open playable sub-screens", async ({ page }) => {
 	await expect(page.getByTestId("blackjack-player-hand")).toBeVisible();
 	await page.getByTestId("blackjack-close").click();
 	await expect(blackjack).toHaveCount(0);
-	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/);
-	// The scene resumes (and the prompt returns) once the overlay is gone;
-	// waiting for it keeps the next key press from landing while still paused.
+	await expectArea(page, /^Casino map/, 5_000);
+	// The scene resumes (and the prompt returns) once the overlay is gone.
 	await expect(page.getByTestId("travel-prompt")).toContainText(
 		"play blackjack",
 	);
+});
 
-	// Poker is west along the table row. Press south first so the player is
-	// pinned against the blackjack table: from there the poker prompt covers a
-	// wide band of the row, while a pass at spawn height would only graze it.
-	await holdKeys(page, ["s"], 2_000);
+test("poker posts the blinds and deals hole cards", async ({ page }) => {
+	await registerFast(page, uniqueName("Shark"), CASINO);
+
+	// Poker is west of the blackjack table, but a diagonal walk slides along the
+	// poker table's right edge just outside its 115px radius. Anchor the height
+	// on the blackjack row first (its table stops the player), then walk west
+	// along that row until the poker radius catches.
+	await walkUntilPrompt(page, ["s"], "play blackjack", 20_000);
+	await holdKeys(page, ["s"], 150);
 	await walkUntilPrompt(page, ["a"], "play poker", 20_000);
-	await page.keyboard.press("e");
+	await useDoor(page);
+
 	const poker = page.getByTestId("poker-overlay");
 	await expect(poker).toBeVisible();
 	await expect(page.getByTestId("poker-deal")).toBeVisible();
-	// Dealing posts the blinds and gives the player two hole cards.
 	await page.getByTestId("poker-deal").click();
 	await expect(page.getByTestId("poker-pot")).toContainText("15");
 	await expect(
@@ -77,15 +62,19 @@ test("the casino tables open playable sub-screens", async ({ page }) => {
 	await page.getByTestId("poker-close").click();
 	await expect(poker).toHaveCount(0);
 	await expect(page.getByTestId("travel-prompt")).toContainText("play poker");
+});
+
+test("roulette takes a bet and settles a spin", async ({ page }) => {
+	await registerFast(page, uniqueName("Punter"), CASINO);
 
 	// Roulette is east, past the blackjack table.
-	await walkUntilPrompt(page, ["d"], "play roulette", 20_000);
-	await page.keyboard.press("e");
+	await walkUntilPrompt(page, ["d", "s"], "play roulette", 20_000);
+	await useDoor(page);
+
 	const roulette = page.getByTestId("roulette-overlay");
 	await expect(roulette).toBeVisible();
 	await expect(page.getByTestId("roulette-spin")).toBeDisabled();
-	// Place 5 on red and see the chip land on the felt. The wallet is shared
-	// across the tables, so the small chip keeps the slots below affordable.
+	// Place 5 on red and see the chip land on the felt.
 	await page.getByTestId("roulette-spot-outside:red").click();
 	await expect(page.getByTestId("roulette-bet-dialog")).toBeVisible();
 	await page.getByTestId("roulette-dialog-chip-5").click();
@@ -94,9 +83,10 @@ test("the casino tables open playable sub-screens", async ({ page }) => {
 		"5",
 	);
 	await expect(page.getByTestId("roulette-staked")).toContainText("5");
-	// Spin and wait for the wheel to settle into a result.
+	// Spin and wait for the wheel to settle into a result. The transient
+	// "Spinning" label is not asserted: e2e shortens the animation, so the
+	// settled result is the only stable signal.
 	await page.getByTestId("roulette-spin").click();
-	await expect(page.getByTestId("roulette-message")).toContainText("Spinning");
 	await expect(page.getByTestId("roulette-play-again")).toBeVisible({
 		timeout: 8_000,
 	});
@@ -106,22 +96,23 @@ test("the casino tables open playable sub-screens", async ({ page }) => {
 	await expect(page.getByTestId("travel-prompt")).toContainText(
 		"play roulette",
 	);
+});
 
-	// Slots run along the bottom wall. Anchor on the blackjack table, then walk
-	// south-west: the player slides along the table edges into the corner
-	// between the poker table and the leftmost slot machines, which is inside
-	// the slots radius. Sliding into a corner means overshooting is harmless,
-	// unlike a timed westward step.
-	await walkUntilPrompt(page, ["a"], "play blackjack", 20_000);
-	await walkUntilPrompt(page, ["a", "s"], "play the slots", 30_000);
-	await page.keyboard.press("e");
+test("slots spin a bet and auto-spin several rounds", async ({ page }) => {
+	await registerFast(page, uniqueName("Spinner"), CASINO);
+
+	// Slots run along the bottom wall. The diagonal from spawn enters their
+	// wide radius before reaching the bottom wall, so overshooting is harmless.
+	await walkUntilPrompt(page, ["a", "s"], "play the slots", 20_000);
+	await useDoor(page);
+
 	const slots = page.getByTestId("slots-overlay");
 	await expect(slots).toBeVisible();
 	// Pick the $50 spin and watch the reels settle into a result.
 	await page.getByTestId("slots-bet-50").click();
 	await expect(page.getByTestId("slots-current-bet")).toContainText("50");
 	await page.getByTestId("slots-spin").click();
-	await expect(page.getByTestId("slots-message")).toContainText("Spinning");
+	// The reels settle quickly in e2e; the settled result is the stable signal.
 	await expect(page.getByTestId("slots-play-again")).toBeVisible({
 		timeout: 8_000,
 	});
@@ -155,5 +146,5 @@ test("the casino tables open playable sub-screens", async ({ page }) => {
 	});
 	await page.getByTestId("slots-close").click();
 	await expect(slots).toHaveCount(0);
-	await expect(canvas).toHaveAttribute("aria-label", /^Casino map/);
+	await expectArea(page, /^Casino map/, 5_000);
 });

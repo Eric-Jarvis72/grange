@@ -1,36 +1,29 @@
 import { expect, test } from "@playwright/test";
 import {
-	holdKeys,
+	expectArea,
 	registerFast,
-	rideTrain,
-	TRAVEL_TIMEOUT,
 	uniqueName,
-	waitForTrainStop,
+	useDoor,
 	waitForWorld,
+	walkToLivestock,
 	walkUntilPrompt,
 } from "./helpers";
 
 test("enter the livestock market and buy a pig from its pen", async ({
 	page,
 }) => {
-	await registerFast(page, uniqueName("Rancher"));
-	const canvas = page.locator("canvas.farm-map-canvas");
+	await registerFast(page, uniqueName("Rancher"), { area: "marketplace" });
 
-	await walkUntilPrompt(page, ["d"], "board the train");
-	await rideTrain(page, "marketplace");
-	await expect(canvas).toHaveAttribute("aria-label", /^Marketplace map/, {
-		timeout: TRAVEL_TIMEOUT,
-	});
-	await waitForTrainStop(page);
+	await walkToLivestock(page);
+	await useDoor(page);
+	await expectArea(page, /^Livestock Market map/, 10_000);
 
-	await walkUntilPrompt(page, ["a"], "enter the livestock market");
-	await page.keyboard.press("e");
-	await expect(canvas).toHaveAttribute("aria-label", /^Livestock Market map/);
-
-	// Step into the aisle, then walk east until a pen is in reach.
-	await holdKeys(page, ["w"], 750);
+	// Walk up-left to the sheep pen (a prompt anchors the height on the lower
+	// row), then east along that row until the pig's pen is in reach. No timed
+	// hold: on a loaded runner a fixed hold covers less ground.
+	await walkUntilPrompt(page, ["w", "a"], "buy a sheep");
 	await walkUntilPrompt(page, ["d"], "buy a pig");
-	await page.keyboard.press("e");
+	await useDoor(page);
 
 	const purchase = page.getByTestId("livestock-purchase");
 	await expect(purchase).toBeVisible();

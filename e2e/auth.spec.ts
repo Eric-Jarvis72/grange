@@ -117,6 +117,8 @@ test("registration rejects a short password and a duplicate username", async ({
 	await page.getByTestId("email").fill(`other-${name}@example.test`);
 	await page.getByTestId("password").fill("long-enough-pass");
 	await page.getByRole("button", { name: /Create Account/i }).click();
-	await expect(page.getByTestId("auth-error")).toContainText(/username is taken/i);
+	await expect(page.getByTestId("auth-error")).toContainText(
+		/username is taken/i,
+	);
 	await expect(page).toHaveURL(`${BASE}/login`);
 });

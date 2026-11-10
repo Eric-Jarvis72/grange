@@ -6,10 +6,11 @@ import {
 	trainImage,
 	trainTracksImage,
 } from "./resources";
+import { e2eMs } from "./testMode";
 
 /** The train's departure/arrival lasts this long, advanced in discrete frames
- * for a chunky, pixel-art feel (20 steps a second). */
-const TRAVEL_MS = 2_000;
+ * for a chunky, pixel-art feel (20 steps a second). E2E shortens the trip. */
+const TRAVEL_MS = e2eMs(2_000, 500);
 const PIXEL_STEP_MS = 50;
 const TRAVEL_STEPS = TRAVEL_MS / PIXEL_STEP_MS;
 /** The committed track art is a full-resolution copy of the source strip, so it

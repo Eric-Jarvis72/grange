@@ -25,19 +25,22 @@ import { subscribeFarmPeers } from "./farmPresence";
 import "./farmMap.css";
 import { HouseMenu } from "./HouseMenu";
 import { leaveHub, subscribeHubPeers } from "./hubClient";
-import type { MarketplaceScene } from "./MarketplaceScene";
-import { MarketWindow } from "./MarketWindow";
 import type { LivestockMarketScene } from "./LivestockMarketScene";
 import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
+import type { MarketplaceScene } from "./MarketplaceScene";
+import { MarketWindow } from "./MarketWindow";
 import { MARKETS } from "./marketData";
 import { TravelMenu } from "./TravelMenu";
-import { useHouseMenu } from "./useHouseMenu";
-import { useWorldEngine } from "./useWorldEngine";
-import { useWorldTravel } from "./useWorldTravel";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
-import { useFarmItemNotices, useFarmObjectInventory } from "./useFarmObjectInventory";
+import {
+	useFarmItemNotices,
+	useFarmObjectInventory,
+} from "./useFarmObjectInventory";
+import { useHouseMenu } from "./useHouseMenu";
 import { useLivestockPurchase } from "./useLivestockPurchase";
+import { useWorldEngine } from "./useWorldEngine";
+import { useWorldTravel } from "./useWorldTravel";
 import type { WorldArea } from "./WalkingScene";
 
 export default function FarmMap() {
@@ -83,14 +86,18 @@ export default function FarmMap() {
 	useEffect(() => {
 		if (!target) return;
 
-		if (area !== "Farm") {
-			emitPauseFarmVisit();
-			return;
-		}
-
-		emitVisitFarm(target, (res) => {
-			if (!res.ok) navigate("/dashboard", { replace: true });
-		});
+		const onFarm = area === "Farm";
+		// The farm snapshot feeds the HUD and `data-world-ready` even when the
+		// world boots into a hub, so join it first and only then decide whether
+		// the player should publish farm presence.
+		emitVisitFarm(
+			target,
+			(res) => {
+				if (!res.ok) navigate("/dashboard", { replace: true });
+			},
+			onFarm,
+		);
+		if (!onFarm) emitPauseFarmVisit();
 	}, [target, area, navigate]);
 
 	// Unmounting the world must clear the active farm and presence.
@@ -123,7 +130,9 @@ export default function FarmMap() {
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
 	const [hubPeers, setHubPeers] = useState<string[]>([]);
 	const [farmPeers, setFarmPeers] = useState<string[]>([]);
-	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(null);
+	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(
+		null,
+	);
 	const [bankDesk, setBankDesk] = useState<BankDesk | null>(null);
 	const livestock = useLivestockPurchase(isOwner, username);
 	const { select: selectAnimal, setMessage: setLivestockMessage } = livestock;
@@ -260,7 +269,9 @@ export default function FarmMap() {
 					onClose={closeLivestockPurchase}
 				/>
 			)}
-			{bankDesk && <BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />}
+			{bankDesk && (
+				<BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />
+			)}
 			{travelPrompt && (
 				<div className="farm-map-travel-prompt" data-testid="travel-prompt">
 					{travelPrompt}

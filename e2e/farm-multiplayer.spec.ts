@@ -1,10 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import {
 	BASE,
-	TRAVEL_TIMEOUT,
 	clickFarmTile,
 	registerFast,
 	rideTrain,
+	TRAVEL_TIMEOUT,
+	multiplayerTest as test,
 	uniqueName,
 	waitForFarmPeer,
 	waitForWorld,
@@ -12,16 +13,16 @@ import {
 } from "./helpers";
 
 test("farmhouse settings control visitors and farm presence", async ({
-	browser,
+	twoPlayers,
 }) => {
-	test.setTimeout(120_000);
+	// Two browser contexts sharing four vCPUs with the other workers: the
+	// default 90s budget is tight when the runner is busy, and a timeout here
+	// aborts an otherwise-healthy run.
+	test.setTimeout(180_000);
+
+	const [owner, guest] = await twoPlayers();
 	const ownerName = uniqueName("Owner");
 	const guestName = uniqueName("Guest");
-
-	const ownerContext = await browser.newContext();
-	const guestContext = await browser.newContext();
-	const owner = await ownerContext.newPage();
-	const guest = await guestContext.newPage();
 
 	await registerFast(owner, ownerName);
 
@@ -56,9 +57,7 @@ test("farmhouse settings control visitors and farm presence", async ({
 	await guest.keyboard.press("1");
 	await clickFarmTile(guest, 9, 9);
 	await expect(guest.getByTestId("farm-map-tiles")).toHaveText("1 tiles");
-	await expect(guest.getByTestId("farm-tile")).toContainText(
-		"(9, 9): tilled",
-	);
+	await expect(guest.getByTestId("farm-tile")).toContainText("(9, 9): tilled");
 	await expect(owner.getByTestId("farm-map-tiles")).toHaveText("1 tiles");
 
 	// Revoking editing blocks the visitor's very next action.
@@ -92,7 +91,4 @@ test("farmhouse settings control visitors and farm presence", async ({
 	// Private farms stay out of the dashboard's open-farm list.
 	await guest.goto(`${BASE}/dashboard`);
 	await expect(guest.getByText(ownerName)).toHaveCount(0);
-
-	await ownerContext.close();
-	await guestContext.close();
 });

@@ -16,7 +16,15 @@ defmodule Grange.FarmTicker do
 
   @impl true
   def init(opts) do
-    interval = Keyword.get(opts, :interval_ms, @interval_ms)
+    # E2E shortens the sweep through app config so a watered crop ripens on the
+    # next tick instead of the next second. Tests still pass `interval_ms`.
+    interval =
+      Keyword.get(
+        opts,
+        :interval_ms,
+        Application.get_env(:grange, :tick_ms, @interval_ms)
+      )
+
     schedule(interval)
     {:ok, %{interval: interval}}
   end

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type PocketId, WHEEL_ORDER, pocketColor } from "./roulette";
 import type { RoulettePhase } from "./rouletteTypes";
+import { e2eMs } from "./testMode";
 import { WHEEL_STEP, nextSpinAngles } from "./wheelAngles";
 
 const SIZE = 300;
@@ -8,8 +9,9 @@ const CENTER = SIZE / 2;
 const RADIUS = 142;
 const LABEL_RADIUS = 104;
 
-/** How long the wheel spins before the result is revealed, in ms. */
-export const SPIN_MS = 4200;
+/** How long the wheel spins before the result is revealed, in ms. E2E shortens
+ * the animation; the settled result is what a spec asserts. */
+export const SPIN_MS = e2eMs(4_200, 1_000);
 
 const FILL: Record<string, string> = {
 	red: "#b3282d",

@@ -2,28 +2,22 @@ defmodule Grange.FarmSprinklerTest do
   @moduledoc false
   use ExUnit.Case, async: false
 
-  alias Grange.{Farm, FarmRecord, FarmStore, Repo}
+  import Grange.FarmFixtures
+
+  alias Grange.{Farm, FarmStore}
 
   setup do
-    FarmStore.reset()
+    reset_farm_state()
     :ok
   end
 
   defp stock(owner, count) do
-    FarmStore.ensure(owner)
-
-    Repo.get!(FarmRecord, owner)
-    |> Ecto.Changeset.change(sprinkler_count: count, land_level: 4)
-    |> Repo.update!()
+    set_farm!(owner, sprinkler_count: count, land_level: 4)
   end
 
   defp plant(owner, x, y) do
     FarmStore.action(owner, %{"kind" => "till", "x" => x, "y" => y})
     FarmStore.action(owner, %{"kind" => "plant", "x" => x, "y" => y, "crop" => "tomato"})
-  end
-
-  defp tile(owner, x, y) do
-    FarmStore.view(owner).tiles |> Enum.find(&(&1.x == x and &1.y == y))
   end
 
   test "placing a sprinkler spends supply and cannot stack on the same corner" do
@@ -67,18 +61,20 @@ defmodule Grange.FarmSprinklerTest do
     covered = [{7, 6}, {8, 6}, {7, 7}, {8, 7}]
     Enum.each(covered ++ [{10, 6}], fn {x, y} -> plant("Alice", x, y) end)
 
-    Enum.each(covered ++ [{10, 6}], fn {x, y} -> assert tile("Alice", x, y).state == :planted end)
+    Enum.each(covered ++ [{10, 6}], fn {x, y} ->
+      assert tile_at("Alice", x, y).state == :planted
+    end)
 
     now = System.system_time(:millisecond)
     assert FarmStore.tick(now) == ["Alice"]
 
-    Enum.each(covered, fn {x, y} -> assert tile("Alice", x, y).state == :watered end)
-    assert tile("Alice", 10, 6).state == :planted
+    Enum.each(covered, fn {x, y} -> assert tile_at("Alice", x, y).state == :watered end)
+    assert tile_at("Alice", 10, 6).state == :planted
 
     # The sprinkler uses the normal growth clock, so the crops still ripen.
     assert FarmStore.tick(now + Farm.grow_ms() + 60_000) == ["Alice"]
 
-    Enum.each(covered, fn {x, y} -> assert tile("Alice", x, y).state == :ready end)
+    Enum.each(covered, fn {x, y} -> assert tile_at("Alice", x, y).state == :ready end)
   end
 
   test "lifting a sprinkler stops it watering later plantings" do
@@ -90,6 +86,6 @@ defmodule Grange.FarmSprinklerTest do
     now = System.system_time(:millisecond)
 
     assert FarmStore.tick(now) == []
-    assert tile("Alice", 3, 3).state == :planted
+    assert tile_at("Alice", 3, 3).state == :planted
   end
 end
