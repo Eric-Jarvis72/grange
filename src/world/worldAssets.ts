@@ -1,6 +1,7 @@
 import type * as ex from "excalibur";
 import { bankResources } from "./bankResources";
 import { casinoResources } from "./casinoResources";
+import { farmerEmoteImage } from "./farmerEmotes";
 import { farmerImage } from "./farmerSprite";
 import { livestockResources } from "./livestockResources";
 import { marketplaceResources } from "./marketplaceResources";
@@ -30,7 +31,7 @@ function unique(groups: ex.ImageSource[][]): ex.ImageSource[] {
 const farmAssets = unique([resources, sprinklerResources]);
 
 /** The shared player sprite every scene draws. */
-const avatarAssets = [farmerImage];
+const avatarAssets = [farmerImage, farmerEmoteImage];
 
 /** The marketplace reuses the meadow tilesheet and the animated train. */
 const marketplaceAssets = unique([

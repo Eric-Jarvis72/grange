@@ -90,4 +90,26 @@ defmodule GrangeWeb.HubChannelTest do
     assert meta("casino", "Area-Frank")
     assert meta("marketplace", "Area-Frank") == nil
   end
+
+  test "an emote broadcasts to the room with the socket identity" do
+    {_reply, socket} = join_hub("Emote-Alice", "marketplace")
+    {_reply, _other} = join_hub("Emote-Bob", "marketplace")
+
+    ref = push(socket, "emote", %{"emote" => "wave", "name" => "Mallory"})
+    assert_reply(ref, :ok)
+
+    assert_broadcast("emote", %{name: "Emote-Alice", emote: "wave"})
+  end
+
+  test "an emote rejects unknown ids and throttles rapid repeats" do
+    {_reply, socket} = join_hub("Emote-Cara", "casino")
+
+    ref = push(socket, "emote", %{"emote" => "mystery"})
+    assert_reply(ref, :error, %{error: "unknown emote"})
+
+    assert_reply(push(socket, "emote", %{"emote" => "wave"}), :ok)
+
+    ref = push(socket, "emote", %{"emote" => "cheer"})
+    assert_reply(ref, :error, %{error: "emote ignored"})
+  end
 end

@@ -60,6 +60,20 @@ export class InputManager {
 		return pressed;
 	}
 
+	/** Reports a queued press without consuming it for the action handlers. */
+	wasPressed(...codes: string[]): boolean {
+		return codes.some((code) => this.pressedKeys.has(code));
+	}
+
+	/**
+	 * Drops every held and queued key. Used when a menu takes over so the
+	 * player does not resume moving (or cancel an emote) from a stale hold.
+	 */
+	clearHeld(): void {
+		this.activeKeys.clear();
+		this.pressedKeys.clear();
+	}
+
 	/**
 	 * Forgets queued presses without touching held keys. Used when an overlay
 	 * takes over so a key still held on close cannot immediately re-trigger.

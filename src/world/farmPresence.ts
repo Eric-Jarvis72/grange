@@ -1,5 +1,6 @@
 import type { Channel } from "phoenix";
 import type { HubPeer } from "../../shared/types";
+import { attachEmotes, detachEmotes } from "./emoteClient";
 import { PresencePeers } from "./presencePeers";
 
 /** Positions are cosmetic; this keeps farm chatter light. */
@@ -31,6 +32,7 @@ export function attachFarmPresence(next: Channel): void {
 	channel = next;
 	joined = true;
 	peers.attach(next);
+	attachEmotes(next);
 	if (latest) send(latest.x, latest.y, true);
 }
 
@@ -42,6 +44,7 @@ export function resetFarmPresence(): void {
 	lastSentAt = 0;
 	latest = null;
 	peers.detach();
+	detachEmotes();
 }
 
 /** Reports the local avatar position; throttled and dead-banded. */

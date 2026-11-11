@@ -15,6 +15,8 @@ defmodule GrangeWeb.FarmChannel do
 
   # A client sends at ~10 Hz; this only guards against abusive or buggy loops.
   @min_move_interval_ms 50
+  @min_emote_interval_ms 500
+  @emotes ~w(wave cheer dance sit sleep shrug)
 
   @impl true
   def join("farm:" <> owner, _payload, socket) do
@@ -104,6 +106,39 @@ defmodule GrangeWeb.FarmChannel do
 
   def handle_in("move", _payload, socket) do
     {:reply, {:error, %{error: "move ignored"}}, socket}
+  end
+
+  # Emotes are cosmetic, like gate toggling: anyone in the room may play one,
+  # including visitors when the owner has editing turned off.
+  @impl true
+  def handle_in("emote", %{"emote" => emote}, socket) do
+    user = socket.assigns[:user]
+    owner = socket.assigns[:owner]
+    now = System.monotonic_time(:millisecond)
+
+    cond do
+      not (is_binary(emote) and emote in @emotes) ->
+        {:reply, {:error, %{error: "unknown emote"}}, socket}
+
+      is_nil(user) or not is_binary(owner) ->
+        {:reply, {:error, %{error: "not logged in"}}, socket}
+
+      not emote_throttle_open?(socket.assigns[:last_emote_at], now) ->
+        {:reply, {:error, %{error: "emote ignored"}}, socket}
+
+      true ->
+        broadcast(socket, "emote", %{
+          name: user.username,
+          emote: emote,
+          at: System.system_time(:millisecond)
+        })
+
+        {:reply, :ok, assign(socket, :last_emote_at, now)}
+    end
+  end
+
+  def handle_in("emote", _payload, socket) do
+    {:reply, {:error, %{error: "unknown emote"}}, socket}
   end
 
   # Farm presence is paused while the player travels into a hub; the channel
@@ -213,4 +248,7 @@ defmodule GrangeWeb.FarmChannel do
 
   defp throttle_open?(nil, _now), do: true
   defp throttle_open?(last, now), do: now - last >= @min_move_interval_ms
+
+  defp emote_throttle_open?(nil, _now), do: true
+  defp emote_throttle_open?(last, now), do: now - last >= @min_emote_interval_ms
 end

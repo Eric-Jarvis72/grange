@@ -1,7 +1,9 @@
 import * as ex from "excalibur";
 import type { HubPeer } from "../../shared/types";
 import { depthForY } from "./depth";
+import { getActiveEmote } from "./emoteClient";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
+import { playFarmerEmote } from "./farmerEmotes";
 import { remoteDirection, remoteStep, shouldSnap } from "./hubInterpolation";
 
 /** Space between the avatar's feet and the bottom of its name label. */
@@ -11,6 +13,7 @@ interface RemoteAvatar {
 	actor: ex.Actor;
 	label: ex.Actor;
 	target: { x: number; y: number };
+	lastEmoteAt: number;
 }
 
 /**
@@ -63,8 +66,14 @@ export class HubPlayers {
 		this.selfLabel.z = this.local.z + 1;
 		this.selfLabel.graphics.visible = this.local.graphics.visible;
 
-		for (const remote of this.remotes.values()) {
+		for (const [name, remote] of this.remotes) {
 			const actor = remote.actor;
+			const emote = getActiveEmote(name);
+			if (emote && emote.at > remote.lastEmoteAt) {
+				remote.lastEmoteAt = emote.at;
+				playFarmerEmote(actor, emote.id);
+			}
+
 			const before = { x: actor.pos.x, y: actor.pos.y };
 			const next = shouldSnap(before, remote.target)
 				? remote.target
@@ -102,7 +111,7 @@ export class HubPlayers {
 		this.scene.add(label);
 		this.placeLabel(label, actor.pos, actor.z);
 
-		return { actor, label, target: { x: peer.x, y: peer.y } };
+		return { actor, label, target: { x: peer.x, y: peer.y }, lastEmoteAt: 0 };
 	}
 
 	private placeLabel(label: ex.Actor, pos: ex.Vector, z: number): void {

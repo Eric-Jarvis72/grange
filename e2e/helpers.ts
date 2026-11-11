@@ -25,6 +25,7 @@ export {
 	hoverFarmTile,
 	worldPoint,
 } from "./support/farm";
+export { emoteList, waitForEmote } from "./support/emotes";
 export {
 	enterMarketplace,
 	expectArea,

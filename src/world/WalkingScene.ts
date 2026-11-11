@@ -1,8 +1,20 @@
 import * as ex from "excalibur";
+import type { EmoteId } from "../../shared/emotes";
 import type { HubArea } from "../../shared/types";
+import {
+	clearLocalHandler,
+	closeEmoteWheel,
+	isEmoteWheelOpen,
+	openEmoteWheel,
+	setLocalHandler,
+} from "../emotes/emoteStore";
+import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { useGameStore } from "../store";
 import { depthForY } from "./depth";
+import { publishEmote } from "./emoteClient";
+import { clearEmote } from "./farmerEmoteState";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
+import { playFarmerEmote } from "./farmerEmotes";
 import { FrameClock } from "./frameClock";
 import {
 	getHubPeers,
@@ -78,6 +90,7 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 	private traveling = false;
 	private paused = false;
 	private hubPlayers?: HubPlayers;
+	private localEmoteHandler: ((id: EmoteId) => void) | null = null;
 	private readonly playerSpeed = 160;
 	/** Wall-clock gameplay step; see `frameClock.ts`. */
 	protected readonly frameClock = new FrameClock();
@@ -114,6 +127,7 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		this.traveling = false;
 		this.paused = false;
 		this.frameClock.reset();
+		this.registerEmoteHandler();
 		this.options.onAreaChange(this.options.area);
 		this.setPrompt(null);
 		if (this.options.hubArea) {
@@ -156,9 +170,22 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		// Other players keep moving while a DOM overlay pauses the local player.
 		this.updateHub(step);
 
-		if (!this.inputManager || this.paused) return;
+		if (!this.inputManager || this.paused || isInventoryBlockingInput()) return;
 		// Freeze the player while a travel animation (the train leaving) plays.
 		if (this.traveling) {
+			this.player.vel = ex.Vector.Zero;
+			updateFarmerGraphics(this.player, { x: 0, y: 0 });
+			return;
+		}
+		if (this.inputManager.consumePress("KeyT")) {
+			if (isEmoteWheelOpen()) closeEmoteWheel();
+			else openEmoteWheel();
+			this.inputManager.clearHeld();
+			this.player.vel = ex.Vector.Zero;
+			updateFarmerGraphics(this.player, { x: 0, y: 0 });
+			return;
+		}
+		if (isEmoteWheelOpen()) {
 			this.player.vel = ex.Vector.Zero;
 			updateFarmerGraphics(this.player, { x: 0, y: 0 });
 			return;
@@ -181,6 +208,9 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 				),
 				MAP_HEIGHT / 2,
 			);
+		if (this.inputManager.wasPressed("KeyE", "Enter", "Space")) {
+			clearEmote(this.player);
+		}
 		updateFarmerGraphics(this.player, direction);
 		if (this.options.hubArea) {
 			publishHubPosition(this.player.pos.x, this.player.pos.y);
@@ -229,11 +259,24 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 
 	override onDeactivate(): void {
 		this.player.vel = ex.Vector.Zero;
+		if (this.localEmoteHandler) {
+			clearLocalHandler(this.localEmoteHandler);
+			this.localEmoteHandler = null;
+		}
 		this.inputManager?.destroy();
 		this.inputManager = undefined;
 		this.setPrompt(null);
 		this.hubPlayers?.clear();
 		if (this.options.hubArea) leaveHub();
+	}
+
+	private registerEmoteHandler(): void {
+		const handler = (id: EmoteId) => {
+			playFarmerEmote(this.player, id);
+			publishEmote(id);
+		};
+		this.localEmoteHandler = handler;
+		setLocalHandler(handler);
 	}
 
 	private setPrompt(prompt: string | null): void {

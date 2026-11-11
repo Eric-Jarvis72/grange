@@ -12,8 +12,8 @@ Everything lives on the existing `farm:<owner>` channel.
 | --- | --- |
 | Join | Authenticated socket only. Owners always join; strangers only while the farm is public |
 | Join reply | `%{farm: ActiveFarm}` followed by Phoenix `presence_state` |
-| Client events | `farmAction`, `gateAction`, `farmPropAction`, `sellProduce`, `updateSettings`, `move` |
-| Server pushes | `farmUpdate` (whole farm), `presence_state` / `presence_diff` |
+| Client events | `farmAction`, `gateAction`, `farmPropAction`, `sellProduce`, `updateSettings`, `move`, `emote` |
+| Server pushes | `farmUpdate` (whole farm), `presence_state` / `presence_diff`, `emote` |
 | Presence meta | `%{name: username, x: x, y: y, at: epoch_ms}` |
 
 Every signed-in visitor sees the other people on the same farm, with their
@@ -55,6 +55,15 @@ per-player:
 - Harvest mutation drops go to the **actor's** seed inventory.
 - Harvested produce goes to the **owner's** barn.
 
+## Emotes
+
+Emotes work exactly like they do in hubs: press `T`, pick a pose, and the farm
+channel broadcasts it to everyone in the room. The pose loops until the player
+moves or acts. Emotes are cosmetic, ephemeral, and allowed for every joined user,
+including visitors when `visitor_edit` is off. The server whitelist and 500 ms
+throttle live in `FarmChannel`; the shared client transport and rendering live
+in `src/world/emoteClient.ts` and `HubPlayers`.
+
 ## Notifications and travel
 
 - A public farm appears in the dashboard and in the train destination menu.
@@ -87,7 +96,7 @@ per-player:
 - No player-vs-player collision; farm avatars can overlap.
 - Remote avatars and their name labels share the prop depth band
   (`depthForY(y)`), so buildings occlude them correctly.
-- No chat, emotes, or profile cards.
+- No chat or profile cards.
 - No authorization middleware beyond the channel; settings are checked there.
 - No interest management; everyone on a farm receives every presence update.
 - No persistence of farm visitor positions across sessions or restarts.

@@ -14,6 +14,7 @@
     "dev:web": "vite",
     "build": "tsc -p tsconfig.json && vite build",
     "art:cards": "node scripts/generate-card-art.mjs",
+    "art:emotes": "node scripts/generate-emote-art.mjs",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:backend": "node scripts/run-mix.mjs test",

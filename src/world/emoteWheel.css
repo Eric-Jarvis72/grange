@@ -1,0 +1,90 @@
+.emote-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 70;
+	display: grid;
+	place-items: center;
+	background: rgba(14, 10, 8, 0.45);
+	backdrop-filter: blur(2px);
+	font-family: "Rye", serif;
+	user-select: none;
+	image-rendering: pixelated;
+}
+
+.emote-wheel {
+	position: relative;
+	width: min(360px, 88vw);
+	height: min(360px, 88vw);
+	border: 4px solid #2b1709;
+	border-radius: 50%;
+	background: radial-gradient(circle, #6e472b 0%, #4d2f18 68%, #2b1709 100%);
+	box-shadow:
+		inset 0 0 0 4px #9c683e,
+		inset 0 0 0 8px #4d2f18,
+		0 12px 0 rgba(0, 0, 0, 0.45);
+}
+
+.emote-wheel-title {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	margin: 0;
+	transform: translate(-50%, -50%);
+	color: #fff6e5;
+	font-size: 1.05rem;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	text-shadow: 2px 2px 0 #2b1709;
+	pointer-events: none;
+}
+
+.emote-slot {
+	position: absolute;
+	width: 76px;
+	height: 56px;
+	padding: 0;
+	transform: translate(-50%, -50%);
+	border: 3px solid #2b1709;
+	border-radius: 0.4rem;
+	background: #6b8e3d;
+	color: #ffffff;
+	font-family: inherit;
+	font-size: 0.82rem;
+	font-weight: 700;
+	letter-spacing: 0.03em;
+	text-transform: uppercase;
+	text-shadow: 1px 1px 0 #233311;
+	box-shadow:
+		inset 0 3px 0 #8fb55b,
+		0 3px 0 #1a260c;
+	cursor: pointer;
+}
+
+.emote-slot:hover,
+.emote-slot:focus-visible {
+	background: #7ea648;
+	outline: none;
+	box-shadow:
+		inset 0 3px 0 #a8cf73,
+		0 3px 0 #1a260c;
+}
+
+.emote-slot:active {
+	transform: translate(-50%, -50%) translateY(2px);
+	box-shadow:
+		inset 0 2px 0 #8fb55b,
+		0 1px 0 #1a260c;
+}
+
+.emote-wheel-hint {
+	position: absolute;
+	left: 50%;
+	bottom: 2.2rem;
+	margin: 0;
+	transform: translateX(-50%);
+	color: #f3e7d0;
+	font-size: 0.72rem;
+	white-space: nowrap;
+	text-shadow: 1px 1px 0 #2b1709;
+	pointer-events: none;
+}

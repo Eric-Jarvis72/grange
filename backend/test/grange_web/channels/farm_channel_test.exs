@@ -214,6 +214,29 @@ defmodule GrangeWeb.FarmChannelTest do
     assert Map.has_key?(Presence.list("farm:Alice"), "Bob")
   end
 
+  test "a read-only visitor can emote and it broadcasts" do
+    public_farm("Alice")
+    {:ok, _reply, _alice} = join_farm("Alice", "Alice")
+    {:ok, _reply, bob} = join_farm("Bob", "Alice")
+
+    ref = push(bob, "emote", %{"emote" => "wave"})
+    assert_reply(ref, :ok)
+    assert_broadcast("emote", %{name: "Bob", emote: "wave"})
+  end
+
+  test "an emote rejects unknown ids and throttles rapid repeats" do
+    public_farm("Alice")
+    {:ok, _reply, bob} = join_farm("Bob", "Alice")
+
+    ref = push(bob, "emote", %{"emote" => "mystery"})
+    assert_reply(ref, :error, %{error: "unknown emote"})
+
+    assert_reply(push(bob, "emote", %{"emote" => "wave"}), :ok)
+
+    ref = push(bob, "emote", %{"emote" => "cheer"})
+    assert_reply(ref, :error, %{error: "emote ignored"})
+  end
+
   test "a signed-out socket cannot join" do
     full_farm("Alice")
 

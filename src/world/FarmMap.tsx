@@ -1,6 +1,7 @@
 import type * as ex from "excalibur";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { closeEmoteWheel } from "../emotes/emoteStore";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
 import { farmToolForItem } from "../inventory/items";
@@ -18,6 +19,8 @@ import { BankWindow } from "./BankWindow";
 import { type CasinoOverlay, CasinoOverlays } from "./CasinoOverlays";
 import type { CasinoScene } from "./CasinoScene";
 import { ComboCounter } from "./ComboCounter";
+import { subscribeEmotes } from "./emoteClient";
+import { EmoteWheel } from "./EmoteWheel";
 import type { FarmMapScene } from "./FarmMapScene";
 import { FishingOverlay } from "./FishingOverlay";
 import type { FarmHudSnapshot } from "./farmHud";
@@ -130,6 +133,7 @@ export default function FarmMap() {
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
 	const [hubPeers, setHubPeers] = useState<string[]>([]);
 	const [farmPeers, setFarmPeers] = useState<string[]>([]);
+	const [emotes, setEmotes] = useState<string[]>([]);
 	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(
 		null,
 	);
@@ -150,6 +154,7 @@ export default function FarmMap() {
 	// Names only change on join/leave, so this does not re-render per frame.
 	useEffect(() => subscribeHubPeers(setHubPeers), []);
 	useEffect(() => subscribeFarmPeers(setFarmPeers), []);
+	useEffect(() => subscribeEmotes(setEmotes), []);
 
 	// The scenes leave the hub when they deactivate; this covers unmounts.
 	useEffect(() => () => leaveHub(), []);
@@ -200,6 +205,7 @@ export default function FarmMap() {
 			setInventoryOpen(false);
 			setFishingOpen(false);
 			closeHouseMenu();
+			closeEmoteWheel();
 		};
 	}, [setPaused, setInventoryOpen, closeHouseMenu]);
 
@@ -241,6 +247,7 @@ export default function FarmMap() {
 			data-world-ready={worldReady ? "true" : "false"}
 			data-hub-peers={hubPeers.join(",")}
 			data-farm-peers={farmPeers.join(",")}
+			data-emotes={emotes.join(",")}
 			data-sprinklers={(farm?.sprinklers ?? [])
 				.map((s) => `${s.x},${s.y}`)
 				.join(";")}
@@ -297,6 +304,7 @@ export default function FarmMap() {
 				<HouseMenu owner={target ?? ""} farm={farm} onClose={closeHouseMenu} />
 			)}
 			<TravelMenu />
+			<EmoteWheel />
 			{fishingOpen && <FishingOverlay onClose={closeFishing} />}
 			<CasinoOverlays open={casinoOverlay} onClose={closeCasinoOverlay} />
 		</main>

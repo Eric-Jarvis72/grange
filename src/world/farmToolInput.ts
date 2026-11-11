@@ -1,4 +1,5 @@
 import type * as ex from "excalibur";
+import { isEmoteWheelOpen } from "../emotes/emoteStore";
 import { farmToolForItem } from "../inventory/items";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { useGameStore } from "../store";
@@ -10,6 +11,7 @@ import type { FarmPlacementPreview } from "./FarmPlacementPreview";
 import type { FarmPropLayer } from "./farmPropLayer";
 import { actOnSprinkler, sprinklerNear } from "./sprinklerActions";
 import type { SprinklerPlacementPreview } from "./SprinklerPlacementPreview";
+import { clearEmote } from "./farmerEmoteState";
 import {
 	isMovablePropAsset,
 	ownsFarmTile,
@@ -49,6 +51,7 @@ export class FarmToolInput {
 		const pointers = engine.input.pointers;
 		pointers.primary.on("down", (evt) => {
 			if (this.disabled()) return;
+			clearEmote(this.host.player);
 			const item = selectedFarmItem();
 			const farm = useGameStore.getState().activeFarm;
 			if (item && isMovablePropAsset(item) && farm) {
@@ -113,7 +116,11 @@ export class FarmToolInput {
 	}
 
 	private disabled(): boolean {
-		return this.host.isDeactivated() || isInventoryBlockingInput();
+		return (
+			this.host.isDeactivated() ||
+			isInventoryBlockingInput() ||
+			isEmoteWheelOpen()
+		);
 	}
 
 	applyAt(worldPos: ex.Vector): void {

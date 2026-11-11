@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { closeEmoteWheel, isEmoteWheelOpen } from "../emotes/emoteStore";
 import { usePauseStore } from "../pause/pauseStore";
 import { useInventoryStore } from "./inventoryStore";
 
@@ -30,7 +31,9 @@ export function useInventoryKeys(): void {
 
 			if (e.code === "Escape") {
 				e.preventDefault();
-				if (useInventoryStore.getState().inventoryOpen) {
+				if (isEmoteWheelOpen()) {
+					closeEmoteWheel();
+				} else if (useInventoryStore.getState().inventoryOpen) {
 					setInventoryOpen(false);
 				} else {
 					togglePause();
@@ -40,6 +43,7 @@ export function useInventoryKeys(): void {
 
 			// Menus capture the rest: no tool selection while paused/opening UI.
 			if (usePauseStore.getState().paused) return;
+			if (isEmoteWheelOpen()) return;
 
 			if (/^Digit[0-9]$/.test(e.code) || /^Numpad[0-9]$/.test(e.code)) {
 				const digit = Number(

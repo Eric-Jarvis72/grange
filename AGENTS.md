@@ -130,6 +130,7 @@ to Phoenix on `:3200`.
 | `pnpm sanity` | Checks committed files for junk/secrets/large files |
 | `pnpm check` | lint + unit + backend + build |
 | `pnpm format` | Biome format write (JS/TS/CSS in `src/` and `shared/`) |
+| `pnpm art:emotes` | Regenerates the placeholder farmer emote atlas |
 | `pnpm setup` / `pnpm bootstrap` | Installs JS and Elixir deps |
 | `pnpm hooks:install` | Reinstalls git hooks that re-bootstrap deps |
 
@@ -284,6 +285,7 @@ Client events:
 | `sellProduce` | `{item: cropId, count: integer}` | farm owner only | `:ok` | `{error: reason}` |
 | `updateSettings` | `{is_public?, visitor_edit?}` | farm owner only | `{farm}` | `{error: reason}` |
 | `move` | `{x, y}` | any joined user | `:ok` | `{error: "move ignored"}` |
+| `emote` | `{emote: EmoteId}` | any joined user | `:ok` | `{error: reason}` |
 | `pausePresence` | `{}` | any joined user | `:ok` | `{error: reason}` |
 | `resumePresence` | `{}` | any joined user | `:ok` | `{error: reason}` |
 
@@ -304,6 +306,9 @@ Authorization rules (`FarmChannel`):
   `visitor_edit` gate for props).
 - Seed spending and mutation drops follow the actor; harvested produce goes to
   the owner's barn.
+- Emotes are cosmetic and allowed for any joined user, including visitors while
+  `visitor_edit` is off. The server whitelist and 500 ms throttle live here; the
+  shared transport is `src/world/emoteClient.ts`.
 
 Farm presence is cosmetic and keyed by username, exactly like hub presence. It
 lives on this channel; there is no separate farm-presence channel or table.
@@ -324,6 +329,10 @@ multiplayer spaces. Farms never join a hub channel.
 - Client event `move` with `{x, y}` updates this channel's presence meta.
   Positions are clamped to `x 16..1136`, `y 32..752` and moves closer than 50 ms
   apart are rejected with `{error: "move ignored"}`. Replies are otherwise `:ok`.
+- Client event `emote` with `{emote: EmoteId}` validates against the server
+  whitelist, throttles repeats to 500 ms, and broadcasts
+  `%{name, emote, at}` to the room. It is cosmetic and allowed for any signed-in
+  player in the area.
 - Hub positions are **cosmetic**. The server does not simulate movement,
   collision, or persistence, and presence is in-memory only.
 
@@ -436,8 +445,11 @@ above their heads.
 Farms are not hubs, but they have their own `farm:<owner>` presence:
 `FarmScenePresence` publishes the local position and renders the other people
 in the same room through `getFarmPeers()`. `FarmMap` exposes the current hub and
-farm peer names as `data-hub-peers` / `data-farm-peers` for e2e tests; they are
-not rendered UI.
+farm peer names as `data-hub-peers` / `data-farm-peers` and recent emotes as
+`data-emotes` for e2e tests; they are not rendered UI. Pressing `T` opens the
+radial emote wheel (`EmoteWheel`); the active scene freezes while it is open and
+the chosen pose loops through `farmerSprites`/`HubPlayers` on every client in
+the room until the player moves or acts.
 
 ---
 
@@ -458,6 +470,7 @@ not rendered UI.
 ├── shared/                    ← TypeScript contracts/common logic
 │   ├── auth.ts                ← User/AuthUser/Session types
 │   ├── crops.ts               ← crop registry (single TS source of truth)
+│   ├── emotes.ts              ← emote ids, atlas rows, frame timing
 │   ├── farm.ts                ← tile types, grid constants, crop encode/decode
 │   ├── mechanics.ts           ← combo/synergy/mutation tuning
 │   └── types.ts               ← channel/wire payload types
@@ -470,6 +483,7 @@ not rendered UI.
 │   ├── useSession.ts          ← session resolution
 │   ├── routes/                ← MainMenu, Login, Dashboard, RequireAuth
 │   ├── inventory/             ← hotbar, inventory modal, item registry, keys
+│   ├── emotes/                ← emote-wheel store + T-toggle helpers
 │   ├── notifications/         ← bottom-left feed store + component
 │   ├── pause/                 ← pause menu overlay + store
 │   └── world/
@@ -478,8 +492,12 @@ not rendered UI.
 │       ├── WalkingScene.ts    ← base scene for marketplace/casino
 │       ├── MarketplaceScene.ts / CasinoScene.ts
 │       ├── hubClient.ts       ← hub channel, presence peers, move throttle
-│       ├── hubPlayers.ts      ← remote avatars + username labels
+│       ├── hubPlayers.ts      ← remote avatars + username labels + emotes
 │       ├── hubInterpolation.ts← easing/snap helpers (tested)
+│       ├── emoteClient.ts     ← emote broadcast transport + active emotes
+│       ├── farmerEmotes.ts / farmerEmoteState.ts ← emote animator
+│       ├── farmSceneEmotes.ts ← farm T toggle + local emote handler
+│       ├── EmoteWheel.tsx     ← radial emote picker (T)
 │       ├── mapData.ts         ← terrain/props/grid/spawn constants
 │       ├── marketplaceData.ts / casinoData.ts
 │       ├── testMode.ts        ← dev-only e2e hooks (boot scene, walk speed)
@@ -617,6 +635,9 @@ train menu, so `is_public` is mostly a guard for stale snapshots.
 
 `FarmPropAction` is `{kind: "dig", index}` or
 `{kind: "place", asset, x, y}`.
+
+`EmoteId` and the atlas metadata live in `shared/emotes.ts`. The client push is
+`{emote: EmoteId}`; the server broadcast is `{name, emote, at}`.
 
 ### 7.3 Coordinates, units, and grids
 
@@ -822,6 +843,25 @@ the client repaints it as grass.
 - The server owns the rule; the client only repaints what `farmUpdate`
   delivers.
 
+### 8.8 Emotes
+
+Press `T` to open the radial emote wheel (`EmoteWheel`). The active scene
+freezes while it is open. Picking an emote plays a local pose immediately and
+pushes `emote` to the joined room (`farm:<owner>`, `hub:marketplace`, or
+`hub:casino`). The server validates the id and throttles repeats to 500 ms.
+
+- Ids and atlas layout live in `shared/emotes.ts`; the channels keep a matching
+  `@emotes` whitelist.
+- Playback is client-side: `playFarmerEmote` starts a looping animation and
+  `updateFarmerGraphics` leaves the pose alone until the player moves or acts.
+  Walking, `Space`, and `E`/`Enter` cancel the emote locally; remote avatars
+  stop when their reported movement resumes.
+- Emotes are cosmetic and ephemeral: no DB, no collision, and no gameplay
+  effect. Any joined user may emote, including visitors with editing off.
+- The placeholder atlas (`public/assets/player_model/farmer-emotes.png`) is
+  generated by `pnpm art:emotes`; replace it with hand art at the same 6x6,
+  64x64 layout.
+
 ---
 
 ## 9. Coding conventions
@@ -997,8 +1037,9 @@ reason (the repo already has one for a deliberate hook dependency).
 - Multiplayer tests use the `twoPlayers` fixture (`multiplayerTest as test`) —
   it creates two isolated contexts and always closes them, including on
   failure. `waitForHubPeer`/`waitForHubPeerGone` read `data-hub-peers`;
-  `waitForFarmPeer`/`waitForFarmPeerGone` read `data-farm-peers`; the house
-  menu uses `house-menu` / `house-visibility-toggle` / `house-edit-toggle`.
+  `waitForFarmPeer`/`waitForFarmPeerGone` read `data-farm-peers`; emotes use
+  `waitForEmote`, which reads `data-emotes`; the house menu uses `house-menu` /
+  `house-visibility-toggle` / `house-edit-toggle`.
 - One spec file per feature, not per overlay: `casino.spec.ts` is four
   deep-linked tests (one per table), not four files that each re-walk the
   world.
@@ -1250,6 +1291,12 @@ runs Gitleaks.
     capped at 100ms and is identical to `delta` at normal frame rates. Take one
     step per `onPreUpdate` and pass it down; do not call `step()` twice in a
     frame.
+39. **Emotes are cosmetic, server-whitelisted, and ephemeral.** The ids live in
+    `shared/emotes.ts` and the matching `@emotes` list in both channels; keep
+    them in sync. The 6x6 atlas layout (64x64 frames, one row per emote) is
+    shared by the generator and the runtime; do not reorder rows without
+    updating `shared/emotes.ts`. Emoting is allowed for any joined user and is
+    never an authorization gate.
 
 ---
 
@@ -1302,7 +1349,7 @@ them silently as part of an unrelated change; mention them in the PR.
   or lag compensation.
 - Hub presence is per area: a player in the casino is invisible to players in
   the marketplace, and players on their farms are in no hub at all.
-- Farm presence is cosmetic only: no collision, chat, emotes, or persistence.
+- Farm presence is cosmetic only: no collision, chat, or persistence.
 - A private farm can still be reached by someone already inside; there is no
   kick and no in-place reconnect, and the client keeps the old snapshot.
 - Turning `visitor_edit` off blocks the next action but does not cancel one

@@ -1,6 +1,7 @@
 import type { Channel } from "phoenix";
 import type { HubArea, HubPeer } from "../../shared/types";
 import { socket } from "../socket";
+import { attachEmotes, detachEmotes } from "./emoteClient";
 import { PresencePeers } from "./presencePeers";
 
 /** Positions are cosmetic; this keeps hub chatter light. */
@@ -49,6 +50,7 @@ export function joinHub(next: HubArea): void {
 			if (channel !== joinedChannel) return;
 			joined = true;
 			peers.attach(joinedChannel);
+			attachEmotes(joinedChannel);
 			if (latest) send(latest.x, latest.y, true);
 		})
 		.receive("error", () => {
@@ -66,6 +68,7 @@ export function leaveHub(): void {
 	lastSent = null;
 	latest = null;
 	peers.detach();
+	detachEmotes();
 	leaving?.leave();
 }
 

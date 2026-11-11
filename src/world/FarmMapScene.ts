@@ -1,6 +1,7 @@
 import * as ex from "excalibur";
 import type { FarmToolId } from "../../shared/farm";
 import { useGameStore } from "../store";
+import { isEmoteWheelOpen } from "../emotes/emoteStore";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { farmToolForItem } from "../inventory/items";
 import { BlockRegistry } from "./blocking";
@@ -18,10 +19,12 @@ import { FarmPropLayer } from "./farmPropLayer";
 import { FarmPlacementPreview } from "./FarmPlacementPreview";
 import { FarmTravel } from "./FarmTravel";
 import { FarmFishing } from "./farmFishing";
+import { farmHousePrompt } from "./farmHousePrompt";
 import { canEditFarm } from "./farmPermissions";
+import { FarmEmotes } from "./farmSceneEmotes";
 import { FarmScenePresence } from "./farmScenePresence";
 import { FarmToolInput } from "./farmToolInput";
-import { updateFarmerGraphics } from "./farmerSprite";
+import { freezeFarmer, updateFarmerGraphics } from "./farmerSprite";
 import { createFarmPlayer, followFarmPlayer } from "./farmSceneSetup";
 import { hoveredFarmTile, type FarmHoveredTile, type FarmHudSnapshot } from "./farmHud";
 import { TOOL_HINTS } from "./farmTools";
@@ -31,7 +34,6 @@ import { farmActionOnSpace } from "./farmSceneInput";
 import { InputManager } from "./InputManager";
 import { buildTerrain, paintFarmTerrain } from "./farmTerrain";
 import {
-	FARM_HOUSE_REACH,
 	MAP_HEIGHT,
 	MAP_WIDTH,
 	props,
@@ -71,6 +73,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	private readonly onOpenHouse: () => void;
 	private train!: TrainController;
 	private presence?: FarmScenePresence;
+	private emotes!: FarmEmotes;
 	private paused = false;
 	/** Wall-clock gameplay step; see `frameClock.ts`. */
 	private readonly frameClock = new FrameClock();
@@ -126,6 +129,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 
 		this.player = createFarmPlayer(this);
 		this.presence = new FarmScenePresence(this, this.player);
+		this.emotes = new FarmEmotes(this.player, () => this.canOpenEmotes());
 
 		this.toolInput = new FarmToolInput({
 			owner: this.owner,
@@ -168,10 +172,12 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		this.travel.activate();
 		this.train.reset(context.data?.trainArriving ?? false);
 		this.presence?.update(0);
+		this.emotes.attach();
 	}
 
 	override onPreUpdate(_engine: ex.Engine, _delta: number): void {
 		const step = this.frameClock.step();
+		if (this.emotes.handle(this.inputManager)) return;
 		if (
 			this.placement.active &&
 			(isInventoryBlockingInput() ||
@@ -212,15 +218,16 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		if (
 			this.paused ||
 			isInventoryBlockingInput() ||
+			isEmoteWheelOpen() ||
 			this.fishing.isPaused ||
 			!this.train.isParked()
 		) {
-			this.player.vel = ex.vec(0, 0);
-			updateFarmerGraphics(this.player, { x: 0, y: 0 });
+			freezeFarmer(this.player);
 			return;
 		}
 
 		const dir = this.inputManager.getMovementVector();
+		this.emotes.cancelOnAction(this.inputManager);
 		updateFarmPlayer(this.player, dir, step, this.combo.moveSpeed, farm?.land_level ?? 0);
 		followFarmPlayer(this.camera, this.player.pos, farm?.land_level ?? 0);
 		updateFarmerGraphics(this.player, dir);
@@ -254,20 +261,18 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 		// Drop keys pressed while the overlay had the keyboard so a held F
 		// cannot reopen the overlay the moment control returns.
 		this.inputManager?.clearPressed();
-		if (paused) {
-			this.player.vel = ex.vec(0, 0);
-			updateFarmerGraphics(this.player, { x: 0, y: 0 });
-		}
+		if (paused) freezeFarmer(this.player);
 	}
 
 	/** Freezes movement while a farmhouse or train-menu overlay is open. */
 	setMenuPaused(paused: boolean): void {
 		this.paused = paused;
 		this.inputManager?.clearPressed();
-		if (paused) {
-			this.player.vel = ex.vec(0, 0);
-			updateFarmerGraphics(this.player, { x: 0, y: 0 });
-		}
+		if (paused) freezeFarmer(this.player);
+	}
+
+	private canOpenEmotes(): boolean {
+		return !this.paused && !this.fishing.isPaused && this.train.isParked() && !isInventoryBlockingInput();
 	}
 
 	/** Plays the train's departure, resolving once it has left the screen. */
@@ -278,6 +283,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 
 	override onDeactivate(): void {
 		this.deactivated = true;
+		this.emotes.detach();
 		this.placement.clear();
 		this.fencePlacement.clear();
 		this.sprinklerPlacement.clear();
@@ -297,11 +303,7 @@ export class FarmMapScene extends ex.Scene<SceneActivationData> {
 	}
 
 	private housePrompt(): string | null {
-		if (!this.isOwner) return null;
-		const house = this.farmProps.position("farmhouse");
-		if (!house) return null;
-		const distance = Math.hypot(this.player.pos.x - house.x, this.player.pos.y - house.y);
-		return distance <= FARM_HOUSE_REACH ? "Press E or Enter to enter the farmhouse" : null;
+		return farmHousePrompt(this.isOwner, this.farmProps, this.player.pos);
 	}
 
 	private performAction(column: number, row: number): void {

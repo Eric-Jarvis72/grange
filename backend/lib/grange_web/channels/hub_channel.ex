@@ -18,6 +18,8 @@ defmodule GrangeWeb.HubChannel do
 
   # A client sends at ~10 Hz; this only guards against abusive or buggy loops.
   @min_move_interval_ms 50
+  @min_emote_interval_ms 500
+  @emotes ~w(wave cheer dance sit sleep shrug)
 
   @impl true
   def join("hub:" <> area, _payload, socket) do
@@ -27,7 +29,8 @@ defmodule GrangeWeb.HubChannel do
           track(username, area, nil, nil)
           send(self(), :after_join)
 
-          {:ok, %{area: area}, assign(socket, :hub, %{area: area, last_move_at: nil})}
+          {:ok, %{area: area},
+           assign(socket, :hub, %{area: area, last_move_at: nil, last_emote_at: nil})}
         else
           {:error, %{reason: "unknown area"}}
         end
@@ -68,6 +71,37 @@ defmodule GrangeWeb.HubChannel do
     {:reply, {:error, %{error: "move ignored"}}, socket}
   end
 
+  @impl true
+  def handle_in("emote", %{"emote" => emote}, socket) do
+    hub = socket.assigns[:hub]
+    user = socket.assigns[:user]
+    now = monotonic_ms()
+
+    cond do
+      not (is_binary(emote) and emote in @emotes) ->
+        {:reply, {:error, %{error: "unknown emote"}}, socket}
+
+      is_nil(user) or is_nil(hub) ->
+        {:reply, {:error, %{error: "not logged in"}}, socket}
+
+      not emote_throttle_open?(hub.last_emote_at, now) ->
+        {:reply, {:error, %{error: "emote ignored"}}, socket}
+
+      true ->
+        broadcast(socket, "emote", %{
+          name: user.username,
+          emote: emote,
+          at: System.system_time(:millisecond)
+        })
+
+        {:reply, :ok, assign(socket, :hub, %{hub | last_emote_at: now})}
+    end
+  end
+
+  def handle_in("emote", _payload, socket) do
+    {:reply, {:error, %{error: "unknown emote"}}, socket}
+  end
+
   # Presence is keyed by username; update this channel's metadata in place, or
   # track it the first time. A second tab gets its own entry and the client
   # renders only the newest one per account.
@@ -86,4 +120,7 @@ defmodule GrangeWeb.HubChannel do
   # Monotonic time may be negative, so "never moved" is represented by nil.
   defp throttle_open?(nil, _now), do: true
   defp throttle_open?(last, now), do: now - last >= @min_move_interval_ms
+
+  defp emote_throttle_open?(nil, _now), do: true
+  defp emote_throttle_open?(last, now), do: now - last >= @min_emote_interval_ms
 end
