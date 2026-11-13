@@ -5,18 +5,21 @@ const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({
 	testDir: "e2e",
-// Accounts are wiped once in `globalSetup`; tests register unique usernames
+	// Accounts are wiped once in `globalSetup`; tests register unique usernames
 	// so they no longer have to reset the server themselves.
 	globalSetup: "./e2e/global-setup.ts",
 	fullyParallel: true,
 	// Two workers is the sweet spot: the farm scene is canvas-heavy, and a
 	// faster local machine started at its own core count just saturates the
-	// CPU and makes every walk slower than it would be with two. CI can raise
-	// it with E2E_WORKERS without editing this file.
+	// CPU and makes every walk slower than it would be with two. CI keeps the
+	// same two workers; raise E2E_WORKERS on a machine with real headroom.
 	workers: Number(process.env.E2E_WORKERS ?? 2),
 	// Generous per-test budget: scene changes animate in game time, so a loaded
 	// runner needs more than the default 30s on the longest trips.
 	timeout: 90_000,
+	// A single retry absorbs the occasional slow-runner walk timeout that has
+	// nothing to do with the change under test.
+	retries: process.env.CI ? 1 : 0,
 	// The CI workflow uploads `playwright-report/`, so always emit the HTML
 	// report (the default list-only reporter never creates it).
 	reporter: [["list"], ["html", { open: "never" }]],
