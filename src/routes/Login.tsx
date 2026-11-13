@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { login, register } from "../auth";
+import { login, register, resendVerification } from "../auth";
 
 type Mode = "signin" | "signup";
 
@@ -14,12 +14,16 @@ export default function Login() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [error, setError] = useState("");
+	const [notice, setNotice] = useState("");
+	const [unverified, setUnverified] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const navigate = useNavigate();
 
 	function switchMode(next: Mode) {
 		setMode(next);
 		setError("");
+		setNotice("");
+		setUnverified(false);
 	}
 
 	async function submit(e: React.FormEvent) {
@@ -27,28 +31,47 @@ export default function Login() {
 		if (busy) return;
 		setBusy(true);
 		setError("");
+		setNotice("");
+		setUnverified(false);
 		try {
-			const res =
-				mode === "signin"
-					? await login({ username: username.trim(), password })
-					: await register({
-							username: username.trim(),
-							email: email.trim(),
-							password,
-						});
+			if (mode === "signup") {
+				const res = await register({
+					username: username.trim(),
+					email: email.trim(),
+					password,
+				});
+				if (res.ok) {
+					// No session yet: the account is locked until the emailed link
+					// is opened, so stay on this screen and explain what happens next.
+					setNotice(
+						res.message ?? "Check your email to verify your account.",
+					);
+				} else {
+					setError(res.error ?? "Something went wrong");
+				}
+				return;
+			}
+
+			const res = await login({ username: username.trim(), password });
 			if (res.ok && res.user) {
-				// login()/register() already stored the user and rebound the socket.
-				// Land on the main menu, signed in; Continue enters the farm.
+				// login() already stored the user and rebound the socket. Land on
+				// the main menu, signed in; Continue enters the farm.
 				navigate("/");
 				return;
 			}
-			// Stays on the main menu: nothing navigates without a server-issued session.
+			if (res.code === "unverified") setUnverified(true);
 			setError(res.error ?? "Something went wrong");
 		} catch {
 			setError("Could not reach the server");
 		} finally {
 			setBusy(false);
 		}
+	}
+
+	async function resend() {
+		setNotice("");
+		await resendVerification(email.trim() || username.trim());
+		setNotice("If that account exists, a new verification link was sent.");
 	}
 
 	return (
@@ -119,6 +142,33 @@ export default function Login() {
 						<p data-testid="auth-error" className="text-center text-sm text-pumpkin">
 							{error}
 						</p>
+					)}
+
+					{unverified && (
+						<button
+							type="button"
+							data-testid="resend-link"
+							onClick={resend}
+							className="text-center text-xs tracking-wider text-leaf underline-offset-2 hover:underline"
+						>
+							Resend the verification email
+						</button>
+					)}
+
+					{mode === "signup" && notice && (
+						<p data-testid="auth-notice" className="text-center text-sm text-leaf">
+							{notice}
+						</p>
+					)}
+
+					{mode === "signin" && (
+						<Link
+							to="/forgot"
+							data-testid="forgot-link"
+							className="text-center text-xs tracking-wider text-husk underline-offset-2 hover:text-leaf hover:underline"
+						>
+							Forgot password?
+						</Link>
 					)}
 				</form>
 

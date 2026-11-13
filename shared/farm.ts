@@ -1,8 +1,6 @@
 import { type CropId, isCropId } from "./crops";
 
 export const FARM_GRID_SIZE = 15;
-export const FARM_GROW_MS = 10_000;
-export const FARM_HARVEST_YIELD = 3;
 
 export type FarmTileState = "tilled" | "planted" | "watered" | "ready";
 

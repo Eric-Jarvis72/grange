@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+const isWindows = process.platform === "win32";
+
 // When invoked from a git hook we never want to block the git operation, so
 // failures are reported but exit 0.
 const hookMode = process.argv.includes("--hook");
@@ -19,13 +21,31 @@ function exists(relative) {
 	return existsSync(join(root, relative));
 }
 
+/**
+ * Spawns a command. On Windows, tools like pnpm, mix, and corepack are `.cmd`
+ * or `.bat` shims that node cannot execute directly, so they are run through
+ * cmd.exe the way a terminal would resolve them.
+ */
+function spawnCommand(command, args, options) {
+	if (isWindows) {
+		return spawnSync("cmd.exe", ["/c", command, ...args], options);
+	}
+	return spawnSync(command, args, options);
+}
+
 function run(command, args) {
-	const result = spawnSync(command, args, { stdio: "inherit", cwd: root });
+	const result = spawnCommand(command, args, { stdio: "inherit", cwd: root });
 	if (result.error?.code === "ENOENT") return false;
 	return (result.status ?? 1) === 0;
 }
 
 function onPath(command) {
+	if (isWindows) {
+		// `where` exits non-zero when the command is not on PATH, and unlike
+		// running the tool it cannot be masked by a cmd.exe shim.
+		const result = spawnSync("where", [command], { stdio: "ignore" });
+		return (result.status ?? 1) === 0;
+	}
 	const result = spawnSync(command, ["--version"], { stdio: "ignore" });
 	return result.error?.code !== "ENOENT";
 }

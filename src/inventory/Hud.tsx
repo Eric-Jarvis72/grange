@@ -1,5 +1,6 @@
 import { NotificationFeed } from "../notifications/NotificationFeed";
 import { usePauseStore } from "../pause/pauseStore";
+import { BarnOverlay } from "../world/BarnOverlay";
 import { EconomyHUD } from "../world/EconomyHUD";
 import type { FarmHoveredTile } from "../world/farmHud";
 import { Hotbar } from "./Hotbar";
@@ -56,6 +57,8 @@ export function Hud({ tiles, hovered }: HudProps) {
 					[Esc] Pause
 				</button>
 			</div>
+
+			<BarnOverlay />
 		</div>
 	);
 }

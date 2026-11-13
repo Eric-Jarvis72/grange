@@ -68,7 +68,11 @@ jobs:
         run: pnpm check
 
       - name: End-to-end tests
-        run: pnpm test:e2e
+        # `pnpm check` already built the SPA into backend/priv/static, so run
+        # Playwright directly instead of rebuilding via `test:e2e`.
+        run: pnpm test:e2e:run
+        env:
+          E2E_WORKERS: 3
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

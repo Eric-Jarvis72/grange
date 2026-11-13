@@ -23,7 +23,7 @@ defmodule Grange.FarmGateActions do
 
   defp valid?(kind, x, y) do
     kind == "toggle_gate" and is_integer(x) and is_integer(y) and
-      x in 0..17 and y in 0..9
+      x in -2..19 and y in -4..9
   end
 
   defp apply_toggle(owner, x, y) do

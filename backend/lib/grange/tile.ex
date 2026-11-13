@@ -16,6 +16,7 @@ defmodule Grange.Tile do
     field(:planted_at, :integer)
     field(:watered_at, :integer)
     field(:ready_at, :integer)
+    field(:tilled_at, :integer)
   end
 
   @type t :: %__MODULE__{
@@ -26,12 +27,23 @@ defmodule Grange.Tile do
           crop: String.t(),
           planted_at: integer() | nil,
           watered_at: integer() | nil,
-          ready_at: integer() | nil
+          ready_at: integer() | nil,
+          tilled_at: integer() | nil
         }
 
   @doc "Casts tile attributes."
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(tile, attrs) do
-    cast(tile, attrs, [:owner, :x, :y, :state, :crop, :planted_at, :watered_at, :ready_at])
+    cast(tile, attrs, [
+      :owner,
+      :x,
+      :y,
+      :state,
+      :crop,
+      :planted_at,
+      :watered_at,
+      :ready_at,
+      :tilled_at
+    ])
   end
 end

@@ -48,7 +48,8 @@ Grange is a peaceful farming game with a hub world:
 - Take the train between your farm, the marketplace, and the casino.
 - Casino games (blackjack, poker, roulette, slots) spend and return
   Grangecoin.
-- Visit other players' farms read-only; visitors can open and close gates.
+- Visit other players' farms read-only by default; owners can make a farm
+  public and let visitors farm, build, and move props.
 - Fences and gates are placed from the hotbar; props (buildings, trees, decor)
   can be dug up and moved.
 
@@ -122,6 +123,7 @@ to Phoenix on `:3200`.
 | `pnpm test` | Vitest, all `**/*.test.ts(x)` |
 | `pnpm test:backend` | ExUnit |
 | `pnpm test:e2e` | Builds the SPA, then Playwright against Phoenix |
+| `pnpm test:e2e:run` | Playwright only, no rebuild (used by CI after `check`) |
 | `pnpm test:e2e:install` | Installs Chromium for Playwright |
 | `pnpm lint` | Biome lint + file-size check + repo sanity |
 | `pnpm lint:backend` | `mix format --check-formatted` + `mix credo --strict` |
@@ -134,7 +136,7 @@ to Phoenix on `:3200`.
 ### Focused test runs
 
 ```sh
-pnpm exec vitest run src/world/farmState.test.ts
+pnpm exec vitest run src/world/farmActions.test.ts
 node scripts/run-mix.mjs test test/grange/crops_test.exs
 pnpm exec playwright test e2e/farm.spec.ts
 ```
@@ -201,10 +203,16 @@ releases stay current; there is no separate release migration task.
 
 ### 5.4 Authentication and sessions
 
-- Accounts and sessions live in SQLite (`users`, `sessions`).
-- `POST /api/auth/register` and `POST /api/auth/login` validate credentials,
-  create a session, set an `httpOnly` cookie (`_grange_key`, session key
-  `:user_token`), and return `{ok, user, token}`.
+- Accounts and sessions live in SQLite (`users`, `sessions`, `auth_tokens`).
+- `POST /api/auth/register` validates credentials and creates an **unverified**
+  account. It issues no session; it emails a link and replies
+  `201 {ok: true, pending: true, emailSent, message}` (see
+  [Email verification](#510-email-verification)).
+- `POST /api/auth/login` validates credentials and only creates a session when
+  `users.email_verified_at` is set. An unverified account gets
+  `403 {ok: false, code: "unverified", error}`. Success sets an `httpOnly`
+  cookie (`_grange_key`, session key `:user_token`) and returns
+  `{ok, user, token}`.
 - `GET /api/auth/me` resolves the cookie and returns `{ok, user, token}` or
   `401 {ok: false, error}`.
 - `POST /api/auth/logout` deletes the session row and clears the cookie.
@@ -226,11 +234,17 @@ auth is the `_grange_key` cookie; the socket uses the token instead.
 
 | Method | Path | Auth | Notes |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | none | `{username, email, password}` → `{ok, user, token}` |
-| POST | `/api/auth/login` | none | `{username, password}` → `{ok, user, token}` |
+| POST | `/api/auth/register` | none | `{username, email, password}` → `201 {ok, pending, emailSent, message}`; no session |
+| POST | `/api/auth/login` | none | `{username, password}` → `{ok, user, token}`; 403 `code: "unverified"` |
+| POST | `/api/auth/verify-email` | none | `{token}` → verifies the email and signs in: `{ok, user, token}` |
+| POST | `/api/auth/resend-verification` | none | `{email}` → always `{ok: true}`; emails a new link |
+| POST | `/api/auth/request-password-reset` | none | `{email}` → always `{ok: true}`; emails a reset link |
+| POST | `/api/auth/reset-password` | none | `{token, password}` → `{ok, user}`; invalidates sessions |
 | GET | `/api/auth/me` | cookie | `{ok, user, token}` or 401 |
 | POST | `/api/auth/logout` | cookie | Destroys the session, clears the cookie |
+| GET | `/api/auth/mailbox` | none | Dev/test only (`enable_test_routes`); returns the console mailer's last message for `?to=` |
 | POST | `/api/economy/transaction` | cookie | `{delta}` integer; clamped at zero |
+| POST | `/api/hardware/buy` | cookie | `{item, quantity}` → `{balance, sprinkler_count}` |
 | GET | `/api/state` | none | `{playerCount, farmCount}` |
 | POST | `/api/reset` | none | Dev/test only; wipes accounts and farms |
 
@@ -239,7 +253,7 @@ path serves the built `index.html`.
 
 ### 5.6 Phoenix Channels protocol
 
-The SPA uses one shared socket and two channels:
+The SPA uses one shared socket and three channel families:
 
 #### `lobby`
 
@@ -257,8 +271,15 @@ Join reply:
 
 #### `farm:<owner>`
 
-Join reply: `{ "farm": <ActiveFarm> }`. The farm must exist; the joining
-owner's own farm is created on demand (`FarmStore.ensure/1`).
+Join reply: `{ "farm": <ActiveFarm> }` followed by Phoenix
+`presence_state` / `presence_diff`. Only signed-in sockets may join. The
+joining account's own farm is created on demand (`FarmStore.ensure/1`) so its
+seed ledger exists even when it is only visiting.
+
+- The owner always joins their own farm.
+- A stranger may join only while the farm is public (`farms.is_public`).
+- Private farms are hidden from the dashboard and train menu; existing visitors
+  are never kicked when a farm turns private.
 
 Server pushes `farmUpdate` → `{ "farm": <ActiveFarm> }` after every successful
 change. There is **no partial/delta update**: the client replaces the whole
@@ -268,10 +289,15 @@ Client events:
 
 | Event | Payload | Allowed caller | Success | Error |
 | --- | --- | --- | --- | --- |
-| `farmAction` | `{action: FarmAction}` | farm owner only | `:ok` | `{error: reason}` |
-| `gateAction` | `{action: {kind: "toggle_gate", x, y}}` | any logged-in user | `:ok` | `{error: reason}` |
-| `farmPropAction` | `{action: {kind: "dig", index} \| {kind: "place", asset, x, y}}` | farm owner only | `:ok` | `{error: reason}` |
+| `farmAction` | `{action: FarmAction}` | owner, or visitor while `visitor_edit` | `{seeds, drops}` | `{error, seeds}` |
+| `gateAction` | `{action: {kind: "toggle_gate", x, y}}` | any joined user | `:ok` | `{error: reason}` |
+| `farmPropAction` | `{action: {kind: "dig", index} \| {kind: "place", asset, x, y}}` | owner, or visitor while `visitor_edit`, or any admin | `:ok` | `{error: reason}` |
+| `barnAction` | `{action: {kind: "deposit" \| "withdraw", item, count}}` | farm owner only | `:ok` | `{error: reason}` |
 | `sellProduce` | `{item: cropId, count: integer}` | farm owner only | `:ok` | `{error: reason}` |
+| `updateSettings` | `{is_public?, visitor_edit?}` | farm owner only | `{farm}` | `{error: reason}` |
+| `move` | `{x, y}` | any joined user | `:ok` | `{error: "move ignored"}` |
+| `pausePresence` | `{}` | any joined user | `:ok` | `{error: reason}` |
+| `resumePresence` | `{}` | any joined user | `:ok` | `{error: reason}` |
 
 Phoenix error replies are `{:reply, {:error, %{error: reason}}, socket}`.
 On the client, `reasonOf()` in `src/socket.ts` reads `error` or `reason` from
@@ -279,11 +305,42 @@ the reply payload.
 
 Authorization rules (`FarmChannel`):
 
-- Unauthenticated sockets may join `lobby` but cannot perform farm actions.
-- Farm actions require `socket.assigns.user.username == socket.assigns.owner`.
-- Visitors may join any existing farm read-only.
-- Visitors may toggle gates but cannot place/remove fences or gates.
-- Prop actions and produce sales are owner-only.
+- Unauthenticated sockets cannot join at all (though they may still join
+  `lobby`).
+- Farm actions require the owner or a farm whose `visitor_edit` is on.
+- The flag is re-read on every action, so revoking editing blocks the next
+  in-flight action immediately.
+- Visitors may always toggle gates; placing/removing fences and gates is an
+  edit action.
+- Prop actions follow the same `visitor_edit` gate, and admins may rearrange
+  props on any farm they can join.
+- Barn storage actions, produce sales, and settings are owner-only.
+- Seed spending and mutation drops follow the actor; harvested produce goes to
+  the owner's barn.
+
+Farm presence is cosmetic and keyed by username, exactly like hub presence. It
+lives on this channel; there is no separate farm-presence channel or table.
+Entering a hub sends `pausePresence` (the channel stays joined so owner-only
+actions still work) and returning sends `resumePresence`.
+
+#### `hub:<area>`
+
+The shared hub areas: `hub:marketplace` and `hub:casino`. These are the only
+multiplayer spaces. Farms never join a hub channel.
+
+- Join requires a signed-in socket (`{"error": "not logged in"}` otherwise) and
+  an area of `marketplace` or `casino` (`"unknown area"` otherwise). The reply is
+  `{ "area": "<area>" }`; Phoenix then pushes `presence_state` / `presence_diff`.
+- Presence is keyed by **username** with meta
+  `{ "name", "x", "y", "at" }` (`at` is epoch ms). A second tab adds another
+  meta under the same key; the client shows only the newest one.
+- Client event `move` with `{x, y}` updates this channel's presence meta.
+  Positions are clamped to `x 16..1136`, `y 32..752` and moves closer than 50 ms
+  apart are rejected with `{error: "move ignored"}`. Replies are otherwise `:ok`.
+- Hub positions are **cosmetic**. The server does not simulate movement,
+  collision, or persistence, and presence is in-memory only.
+
+See `notes/hub-multiplayer.md` for the client flow and tuning constants.
 
 ### 5.7 Farm action round trip
 
@@ -293,18 +350,22 @@ Authorization rules (`FarmChannel`):
    (`till`, `plant`, `water`, `harvest`) from the held tool and the current
    server tile.
 4. `performFarmAction()` (`src/world/farmActionRunner.ts`):
-   - consumes one seed locally for `plant`,
    - records the combo (`ComboController`),
    - plays the scythe sweep FX,
    - possibly emits a combo-spread action to an orthogonal neighbor,
    - emits `farmAction` with `{kind, x, y, crop?, tool?, comboMutationMultiplier?}`.
-5. `FarmChannel.handle_in("farmAction", ...)` authorizes, then calls
-   `FarmStore.action(owner, action)`.
+5. `FarmChannel.handle_in("farmAction", ...)` authorizes the owner or a
+   visitor while `visitor_edit` is on, then calls
+   `FarmStore.action(owner, action, actor)`.
 6. `FarmStore` normalizes the action, runs it in an Ecto transaction, persists
-   the change, and broadcasts `farmUpdate` + lobby `farms`.
-7. `src/socket.ts` receives `farmUpdate`, calls
+   the change, spends the actor's seed, persists any mutation drop in the
+   actor's inventory, and broadcasts `farmUpdate` + lobby `farms`. Harvested
+   produce goes to the owner's barn.
+7. The `farmAction` ack returns `{seeds, drops}` (or `{error, seeds}`); the
+   client applies the authoritative seed counts and announces any drop.
+8. `src/socket.ts` receives `farmUpdate`, calls
    `useGameStore.setActiveFarm(farm)`.
-8. `FarmMapScene.onPreUpdate` calls `FarmTileSync.sync()` and repaints only
+9. `FarmMapScene.onPreUpdate` calls `FarmTileSync.sync()` and repaints only
    changed tiles; `useBarnReconcile` reconciles produce items to the barn.
 
 The farm is **server-authoritative**. There are no optimistic tile updates.
@@ -350,8 +411,11 @@ animation, and travel to the marketplace.
 
 The Excalibur engine is created as soon as the route has a farm target; the
 world only becomes interactive after the farm channel join supplies
-`activeFarm` (`data-world-ready="true"` requires it). Resources are loaded
-before `engine.start()`, and the scene waits for store updates rather than
+`activeFarm` (`data-world-ready="true"` requires it). Only the boot scene's
+images block the first frame (`worldAssets.ts`): the engine starts once that
+scene can draw, and `preloadWorldResources` warms the other scenes in the
+background. Travel awaits `ensureSceneResources(destination)` so a fast player
+never lands in a blank scene. The scene waits for store updates rather than
 gating engine construction.
 
 DOM overlays (inventory, pause menu, market window, casino game overlays) pause
@@ -359,8 +423,67 @@ the active scene via `scene.setPaused(true)` and/or
 `isInventoryBlockingInput()` so movement and tool input are frozen.
 
 The train (`TrainController`) animates departures/arrivals and gates boarding.
-Travel destinations and spawn points live in `mapData.ts`,
+Boarding opens the `TravelMenu` instead of leaving directly; the local player
+picks a destination and only then does the departure animation play.
+`trainDestinations()` in `src/world/travelDestinations.ts` builds the list:
+
+- own farm: Marketplace + other public farms,
+- marketplace: Your Farm + other public farms,
+- guest farm: Your Farm + Marketplace + other public farms.
+
+Farm-to-farm and guest-to-marketplace trips remount the world through the
+router with a one-shot `markTrainArrival()` flag; trips inside the local farm's
+world switch Excalibur scenes directly. Spawn points live in `mapData.ts`,
 `marketplaceData.ts`, and `casinoData.ts`.
+
+The owner opens the `HouseMenu` by pressing `E`/`Enter` within
+`FARM_HOUSE_REACH` of the farmhouse. It toggles `is_public` and `visitor_edit`;
+both overlays pause the active scene while open.
+
+The marketplace and casino are **hub areas**: a `WalkingScene` with `hubArea`
+joins `hub:<area>` on activate, leaves on deactivate, and publishes the local
+position at ~10 Hz while moving. `HubPlayers` renders the other players from
+`getHubPeers()`, easing them toward their reported positions with usernames
+above their heads.
+
+Farms are not hubs, but they have their own `farm:<owner>` presence:
+`FarmScenePresence` publishes the local position and renders the other people
+in the same room through `getFarmPeers()`. `FarmMap` exposes the current hub and
+farm peer names as `data-hub-peers` / `data-farm-peers` for e2e tests; they are
+not rendered UI.
+
+### 5.10 Email verification and password reset
+
+New accounts must confirm their email before they can sign in. The same
+single-use token machinery backs both email verification and password reset.
+
+- `users` carries `email_verified_at` (nil until confirmed); a separate
+  `auth_tokens` table holds one-time tokens keyed by `token_hash` with a
+  `purpose` (`verify_email` | `reset_password`) and `expires_at`. Only the
+  SHA-256 hash is stored (same pattern as sessions); verify links live 24 hours,
+  reset links 1 hour. `Grange.AuthToken.issue/2` mints, `consume/2` burns once.
+- `Accounts.send_verification_email/1` and `send_password_reset_email/1` build
+  the message via `Grange.Mailer`; `verify_email/1`, `resend_verification/1`,
+  `request_password_reset/1`, and `reset_password/2` drive the flows.
+  `reset_password/2` clears every session so the old password stops working
+  everywhere.
+- `Grange.Mailer` is a behaviour with two adapters: `Mailer.Console` (default
+  outside production; logs and keeps messages in an Agent so the dev mailbox
+  route can read links back) and `Mailer.Mailtrap` (posts to Mailtrap's REST API
+  over `:httpc`, no extra dependency). The `:mailer` app config picks one;
+  `runtime.exs` selects Mailtrap in prod and auto-detects in dev (override with
+  `GRANGE_MAILER=console|mailtrap`).
+- Mailtrap needs `MAILTRAP_API_TOKEN` and `MAIL_FROM_EMAIL` (`MAIL_FROM_NAME`
+  optional; `MAILTRAP_FROM` accepted as a fallback From). In production the
+  token is a GitHub secret written to `~/grange.env` by `deploy/deploy.sh`.
+  Links use `:app_url` (`APP_URL`, else `https://<PHX_HOST>`).
+- Client flow: `/login` registers then shows a "check your email" notice; the
+  emailed link opens `/verify?token=…`. `/forgot` requests a reset and
+  `/reset?token=…` sets a new password.
+- e2e read the links back through the dev-only `GET /api/auth/mailbox` route
+  (console mailer) via helpers in `e2e/support/auth.ts`; `playwright.config.ts`
+  pins `GRANGE_MAILER=console` so a developer's real `.env` doesn't force
+  actual sending during tests.
 
 ---
 
@@ -391,7 +514,7 @@ Travel destinations and spawn points live in `mapData.ts`,
 │   ├── store.ts               ← Zustand game store (user, players, farms)
 │   ├── config.ts              ← version/watermark
 │   ├── useSession.ts          ← session resolution
-│   ├── routes/                ← MainMenu, Login, Dashboard, RequireAuth
+│   ├── routes/                ← MainMenu, Login, VerifyEmail, ForgotPassword, ResetPassword, Dashboard, RequireAuth
 │   ├── inventory/             ← hotbar, inventory modal, item registry, keys
 │   ├── notifications/         ← bottom-left feed store + component
 │   ├── pause/                 ← pause menu overlay + store
@@ -400,9 +523,12 @@ Travel destinations and spawn points live in `mapData.ts`,
 │       ├── FarmMapScene.ts    ← farm gameplay scene
 │       ├── WalkingScene.ts    ← base scene for marketplace/casino
 │       ├── MarketplaceScene.ts / CasinoScene.ts
+│       ├── hubClient.ts       ← hub channel, presence peers, move throttle
+│       ├── hubPlayers.ts      ← remote avatars + username labels
+│       ├── hubInterpolation.ts← easing/snap helpers (tested)
 │       ├── mapData.ts         ← terrain/props/grid/spawn constants
 │       ├── marketplaceData.ts / casinoData.ts
-│       ├── farmState.ts       ← client-local farm simulation (tests/local)
+│       ├── testMode.ts        ← dev-only e2e hooks (boot scene, walk speed)
 │       ├── farmActions.ts     ← pure action resolution + synergy + drops
 │       ├── farmActionRunner.ts← emit farming actions + combo/sweep
 │       ├── combo* / farmCombo ← combo tracker/controller/store/HUD
@@ -411,7 +537,8 @@ Travel destinations and spawn points live in `mapData.ts`,
 │       ├── farmProp* / propLayer / placement previews
 │       ├── marketData / useFarmMarket / MarketWindow
 │       ├── blackjack*, poker*, roulette*, slots* ← client-side casino games
-│       ├── resources.ts / *Resources.ts ← Excalibur image loading
+│       ├── resources.ts / *Resources.ts ← Excalibur image sources
+│       ├── worldAssets.ts     ← per-scene image groups + lazy loading
 │       └── walkCollisions / sceneObstacles / playerMovement / train
 ├── backend/
 │   ├── mix.exs
@@ -419,10 +546,15 @@ Travel destinations and spawn points live in `mapData.ts`,
 │   ├── lib/grange/
 │   │   ├── application.ex     ← supervision + boot migrations
 │   │   ├── repo.ex            ← Ecto SQLite repo
-│   │   ├── accounts.ex        ← registration/login/sessions/balance
+│   │   ├── accounts.ex        ← registration/login/sessions/password reset
+│   │   ├── auth_token.ex       ← one-time verify/reset tokens
+│   │   ├── mailer.ex           ← mail behaviour + templates
+│   │   ├── mailer/{console,mailtrap}.ex ← dev console / Mailtrap adapters
 │   │   ├── farm_store.ex      ← farm transactions, views, tick, broadcasts
 │   │   ├── farm_ticker.ex     ← 1s GenServer driving FarmStore.tick/0
+│   │   ├── farm_tick.ex       ← per-tick sweep: ripen, revert untended soil
 │   │   ├── farm.ex            ← pure tile state machine + bounds
+│   │   ├── hub.ex             ← hub area whitelist + position clamping
 │   │   ├── crops.ex           ← Elixir mirror of crop registry/mechanics
 │   │   ├── farm_action.ex     ← action opts + mutation drop roll
 │   │   ├── barn.ex / barn_item.ex
@@ -434,7 +566,8 @@ Travel destinations and spawn points live in `mapData.ts`,
 │   │   ├── endpoint.ex        ← socket + static + session + router
 │   │   ├── router.ex          ← /api routes + SPA fallback
 │   │   ├── user_socket.ex     ← token auth in connect params
-│   │   ├── channels/{lobby,farm}_channel.ex
+│   │   ├── presence.ex        ← ephemeral hub presence tracker
+│   │   ├── channels/{lobby,farm,hub}_channel.ex
 │   │   └── controllers/{auth,economy,health,page,fallback}_controller.ex
 │   ├── priv/repo/migrations/  ← auto-run on boot
 │   └── test/                  ← ExUnit + support helpers + Credo checks
@@ -464,16 +597,17 @@ Travel destinations and spawn points live in `mapData.ts`,
 | --- | --- | --- |
 | `users` | `id` string PK, `username` unique, `email` unique, `password_hash`, `balance` default 100, `is_admin` default false, `inserted_at` | IDs are 32-char lowercase hex strings. No `updated_at`. |
 | `sessions` | `token_hash` string PK, `user_id` FK → `users.id`, `expires_at`, `inserted_at` | Only the SHA-256 hash is stored. |
-| `farms` | `owner` string PK (username), `tomatoes` legacy integer, `fence_count` default 20, `gate_count` default 2, timestamps | Owner is the **username**, not `users.id`. |
-| `tiles` | `id`, `owner` FK → `farms.owner`, `x`, `y`, `state` string, `crop` string, `planted_at`/`watered_at`/`ready_at` integer ms | Unique `(owner, x, y)`. `state` is one of `tilled`, `planted`, `watered`, `ready`. |
+| `farms` | `owner` string PK (username), `tomatoes` legacy integer, `fence_count` default 20, `gate_count` default 2, `storage` JSON map default `{}`, `sprinkler_count` default 0, `is_public` default false, `visitor_edit` default false, timestamps | Owner is the **username**, not `users.id`. Settings default to private/read-only. `storage` is the barn-storage container (`BarnStorage`), separate from `barn_items`. |
+| `tiles` | `id`, `owner` FK → `farms.owner`, `x`, `y`, `state` string, `crop` string, `planted_at`/`watered_at`/`ready_at`/`tilled_at` integer ms | Unique `(owner, x, y)`. `state` is one of `tilled`, `planted`, `watered`, `ready`. `tilled_at` is set while the tile is bare `tilled` ground so `FarmTick` can revert abandoned soil to grass. |
 | `barn_items` | `owner` FK, `item`, `count` | Unique `(owner, item)`. `item` is a crop id. |
 | `farm_fences` | `owner` FK, `x`, `y` | Unique `(owner, x, y)`. |
 | `farm_gates` | `owner` FK, `x`, `y`, `direction`, `open` | Unique `(owner, x, y)`. `direction` is `horizontal` or `vertical`. |
+| `farm_sprinklers` | `owner` FK, `x`, `y` | Unique `(owner, x, y)`. `(x, y)` is the top-left tile of the watered 2x2; the object is drawn on that 2x2's shared corner. |
 | `farm_props` | `owner` FK, `source_index`, `asset`, `x`, `y`, `carried` | Unique `(owner, source_index)`. Indices map to the starter prop list. |
 
 All foreign keys cascade on farm delete. `Accounts.reset/0` deletes sessions
 then users; `FarmStore.reset/0` deletes tiles, barn items, fences, gates,
-props, then farms.
+sprinklers, props, then farms.
 
 ### 7.2 Wire types (`shared/types.ts`)
 
@@ -495,10 +629,16 @@ export interface ActiveFarm {
   tiles: FarmTile[];
   tomatoes: number;           // legacy convenience, derived from barn.tomato
   barn: Record<string, number>;
+  animals: Record<string, number>;  // livestock by species
+  land_level?: number;
+  is_public: boolean;         // strangers may join
+  visitor_edit: boolean;      // visitors may farm/build/move props
   fences: Array<{ x: number; y: number }>;
   fence_count: number;
   gates: FenceGate[];
   gate_count: number;
+  sprinklers: FarmSprinkler[];   // anchored by the 2x2's top-left tile
+  sprinkler_count: number;
   prop_overrides: Array<{
     index: number; asset: string; x: number; y: number; carried: boolean;
   }>;
@@ -508,7 +648,8 @@ export interface ActiveFarm {
 export type FarmAction = {
   kind:
     | "till" | "plant" | "water" | "harvest"
-    | "place_fence" | "remove_fence" | "place_gate" | "remove_gate";
+    | "place_fence" | "remove_fence" | "place_gate" | "remove_gate"
+    | "place_sprinkler" | "remove_sprinkler";
   x: number;
   y: number;
   crop?: CropId;                       // plant only
@@ -518,7 +659,8 @@ export type FarmAction = {
 ```
 
 `FarmSummary` is the lobby shape: `{owner, tiles, planted, watered, ready,
-tomatoes}`.
+tomatoes, is_public}`. Private farms are filtered out of the dashboard and
+train menu, so `is_public` is mostly a guard for stale snapshots.
 
 `FarmGate` is `{x, y, direction: "horizontal" | "vertical", open: boolean}`.
 
@@ -583,8 +725,8 @@ Hand-harvest vs scythe:
 - A **scythe-only** crop clicked with another tool shows a shake and
   `"<Crop> needs a scythe."`.
 - **Hand or scythe** crops are picked by hand with any non-scythe tool.
-- Each harvest yields **1** produce item (`FARM_HARVEST_YIELD` and
-  `Farm.harvest_yield/0` are legacy and unused).
+- Each harvest yields **1** produce item (`Farm.harvest_yield/0` is legacy and
+  unused).
 - Regrowing crops stay on the tile and reset to their `regrowStage`.
 
 ### 8.2 Grid synergy
@@ -592,9 +734,8 @@ Hand-harvest vs scythe:
 - **Wheat / Midas Wheat — Pack Mentality:** +5% growth speed per adjacent
   growing wheat-family crop, capped at +20%.
 - **Lettuce / Frost-Crisp — Moisture Sponge:** while watered/ready, adjacent
-  crops retain moisture; client simulation applies a 25% slower decay
-  (`LETTUCE_MOISTURE_DECAY_MULTIPLIER`). The server only models the growth
-  multiplier for wheat/tomato (see gaps).
+  crops retain moisture (`LETTUCE_MOISTURE_DECAY_MULTIPLIER`). Neither the
+  server tick nor the client applies it yet (see gaps).
 - **Tomato / Sun-Burst — Space-Hungry:** −20% growth if touching another
   tomato-family crop; +15% if touching lettuce.
 - Positive synergy for mutation rolls:
@@ -631,15 +772,13 @@ chance = (0.0015 + (synergyActive ? 0.0025 : 0)) * comboMultiplier
 
 `comboMultiplier` is `1.5` at combo 15+, else `1.0`. Maximum is `0.006` (0.6%).
 
-- The client rolls in `ComboController.rollRareSeed` and adds the seed to local
-  inventory immediately.
-- The server rolls in `FarmAction.mutation_drops/5` and puts `drops` on the
-  returned farm map, but the channel ignores that return value. Rare seeds are
-  therefore **not persisted server-side** yet.
+- The **server** rolls in `FarmAction.mutation_drops/5`, persists the drop in the
+  actor's seed inventory, and returns the item ids in the `farmAction` ack.
+- The client does not roll; it reads `drops` from the ack and shows a
+  "Rare <name>!" notice.
 - Sun-Burst Tomato declares a separate 10% bonus seed (`tomato-seed`) in the
-  registry. The client-local simulation (`LocalFarmStore.harvestCrop`) rolls
-  it, but the live server harvest path does **not**; treat it like the rare
-  mutation drop until the server persists drops.
+  registry, but nothing rolls it: the server harvest path ignores it and the
+  client has no local harvest simulation.
 
 ### 8.5 Fences, gates, and props
 
@@ -663,6 +802,74 @@ chance = (0.0015 + (synergyActive ? 0.0025 : 0)) * comboMultiplier
   indices live in `FarmProps.@assets`. **Adding or reordering starter props
   requires updating those indices.**
 - Placement uses drag previews and validates terrain/obstacles/collisions.
+- **Sprinklers** are a separate `farm_sprinklers` table, bought at the
+  hardware-market stall in the marketplace (opened as the "Hardware Store"
+  market window; `POST /api/hardware/buy`) and tracked on
+  `farms.sprinkler_count`. A sprinkler is anchored by the top-left tile of a
+  2x2 and drawn on the corner those four tiles share; it may sit on grass or
+  worked (tilled/planted) soil without blocking the tile. While it stands,
+  every planted tile in its square is watered on the next `FarmStore.tick/1`
+  (via `Grange.FieldWater`), so it keeps its 2x2 saturated until it is
+  shoveled up; bare tilled soil in the square is also kept from the till-decay
+  sweep (see 8.7). The client mirrors `sprinkler_count` into the hotbar; the placed
+  sprite is a static green base plus a brass rotor that spins briefly about once
+  a minute with a water spray (`SprinklerLayer`), and it is drawn below the crop
+  layer so a mature plant always renders in front of it.
+- The hardware store stall also **restocks fences and gates** (they spend the
+  farm's supply counts) and sells the basic tools (hoe, watering can, scythe,
+  shovel) as one-off purchases. The tools read as "Owned" because the starter
+  hotbar already grants them.
+
+### 8.6 Farm visibility and visitor editing
+
+Each farm row carries two flags, both defaulting to off:
+
+- `is_public` — whether strangers may join `farm:<owner>`. Going private only
+  blocks **new** joins; anyone already in the room stays until they leave.
+- `visitor_edit` — whether visitors may perform farm actions. The server
+  re-reads it on every action, so revoking it blocks the next action
+  immediately (there is no push that evicts an in-flight request).
+
+The owner opens the `HouseMenu` with `E`/`Enter` within `FARM_HOUSE_REACH` of
+the farmhouse and toggles both flags through `updateSettings`.
+
+What visitors may do while `visitor_edit` is on:
+
+- till, plant, water, harvest;
+- place/remove fences and gates;
+- dig and place movable props.
+
+Regardless of editing, visitors may walk around and toggle gates. Selling
+produce, buying livestock, the bank, fishing, and settings are owner-only.
+
+Ownership of the farm state is shared, but seed spending and rare mutation
+drops follow the **actor**, while harvested produce goes to the **owner's**
+barn. `FarmChannel` authorizes against the persisted flags; the client
+`canEditFarm()` helper is only the UI gate.
+
+Private farms are omitted from the dashboard's open-farm list and from the
+train destination menu. They are hidden, not shown as locked rows.
+
+### 8.7 Tilled soil reverts to grass
+
+Bare tilled ground does not stay tilled forever. `FarmTick.run/1` (called once a
+second by `FarmTicker`) deletes any tile that has sat in the `tilled` state for
+`Farm.till_decay_ms/0` (20 minutes) and then broadcasts the farm and lobby, so
+the client repaints it as grass.
+
+- Only the bare `tilled` state counts down. Planting or watering moves the tile
+  to `planted`/`watered` and clears `tilled_at`, so a planted crop is safe until
+  it is harvested.
+- A harvest that clears the tile back to bare ground stamps a fresh
+  `tilled_at`, restarting the 20-minute window.
+- Soil inside a sprinkler's 2x2 is exempt: `FarmTick` skips any covered tile, so
+  a sprinkler keeps its tilled ground from ever drying out. Placing or lifting a
+  sprinkler restamps the covered tiles' `tilled_at`, so removing one starts a
+  fresh 20-minute window instead of reverting on the next tick.
+- There is no warning UI: the reversion is silent and the client just receives
+  the updated farm. `tilled_at` is server-only and is not sent over the wire.
+- The server owns the rule; the client only repaints what `farmUpdate`
+  delivers.
 
 ---
 
@@ -698,9 +905,9 @@ chance = (0.0015 + (synergyActive ? 0.0025 : 0)) * comboMultiplier
 ### 9.3 Excalibur
 
 - Scenes extend `ex.Scene` or `WalkingScene`.
-- Register new scenes and resources in `FarmMap.tsx`; add image sources to
-  `resources.ts` (or the scene-specific resource module) **before**
-  `engine.start()`.
+- Register new scenes in `FarmMap.tsx`; add image sources to `resources.ts` (or
+  the scene-specific resource module) and to that scene's group in
+  `worldAssets.ts`, or the image renders blank on the first visit.
 - Use `TILE_SIZE`/`MAP_*` constants; do not hard-code 64/1152/768.
 - Use `BlockRegistry`, `walkCollisions`, and `sceneObstacles` instead of ad-hoc
   collision checks.
@@ -708,7 +915,13 @@ chance = (0.0015 + (synergyActive ? 0.0025 : 0)) * comboMultiplier
   (`"Farm map..."` / `"Marketplace map..."` / `"Casino map..."`), and
   `data-testid` values; e2e depends on them.
 - Freeze the scene and hide/freeze the player while a DOM overlay owns input.
-- Load order matters: resources → `engine.start()` → `goToScene`.
+- Load order matters: the boot scene's images (`ensureSceneResources`) →
+  `engine.start()` → `goToScene`. The rest preload behind the first frame.
+- Drive movement, collision steps, and train animation with `FrameClock`
+  (`src/world/frameClock.ts`), not the `delta` argument. Excalibur replaces any
+  frame longer than 200ms with 1ms, which puts the world into slow motion on a
+  loaded machine; `FrameClock` reports the real wall-clock step (capped at
+  100ms) and is identical to `delta` at normal frame rates.
 
 ### 9.4 Elixir
 
@@ -735,7 +948,7 @@ When a file nears the cap, extract one coherent concern:
 - Obstacles → `sceneObstacles.ts`, `walkCollisions.ts`
 - Rendering → `cropLayer.ts`, `fenceRendering.ts`, `propLayer.ts`
 - Data → `*Data.ts`, `*Resources.ts`
-- Pure rules → `farmActions.ts`, `farmState.ts`
+- Pure rules → `farmActions.ts`, `farmActionRunner.ts`
 
 Do not add `biome-ignore` comments to dodge lint unless there is a documented
 reason (the repo already has one for a deliberate hook dependency).
@@ -763,24 +976,90 @@ reason (the repo already has one for a deliberate hook dependency).
   `async: true`.
 - `GrangeWeb.ChannelCase` provides `register_user/1` and imports
   `Phoenix.ChannelTest`.
+- `Grange.FarmFixtures` (`backend/test/support/farm_fixtures.ex`) is the
+  shared setup helper: `reset_farm_state/0`, `full_farm/1`, `public_farm/1`,
+  `editable_farm/1`, `set_farm!/2`, `tile_at/3`, `grow/3`. Prefer it over
+  hand-rolled `FarmStore` calls so the tests keep their shape.
 - Tests call `FarmStore.tick/1` directly; the ticker is disabled in test
   config.
 
 ### 10.3 E2E (Playwright)
 
-- Specs live in `e2e/`; shared helpers in `e2e/helpers.ts`.
-- Every test starts with `resetServer()` (`POST /api/reset`) and registers a
-  unique account (`uniqueName`).
-- `registerAccount` leaves the page on the main menu; `register`/`enterFarm`
-  continue into `/world`.
-- `waitForWorld` waits for the canvas and `[data-world-ready="true"]`.
+- Specs live in `e2e/`; shared helpers in `e2e/helpers.ts`, which re-exports
+  the implementation from `e2e/support/` (`auth`, `nav`, `farm`, `peers`,
+  `players`) so the modules stay under the file-size cap.
+- Accounts are wiped once per run by `e2e/global-setup.ts` (`POST /api/reset`).
+  Tests do **not** reset the server themselves: they register a unique account
+  (`uniqueName`) instead, which is what lets the suite run in parallel.
+- Use `registerFast` (auth API + `goto`) unless the test is about the login
+  form itself; only `auth.spec.ts` drives the UI registration flow
+  (`registerAccount` / `register`).
+- **Deep-link into the scene under test.** `registerFast(page, name, { area:
+  "casino" })` boots `/world?area=casino` instead of walking there. The real
+  navigation loop is covered once, in `journey.spec.ts`; feature specs should
+  not pay for a farm → marketplace → casino walk. Valid areas are
+  `farm-map`, `marketplace`, `casino`, `livestock-market`, `bank`
+  (`requestedStartArea()` in `src/world/testMode.ts`).
+- The hooks are gated to dev/test: `PageController` injects
+  `<meta name="grange-test-routes" content="true">` only when
+  `enable_test_routes` is on (the same flag as `/api/reset`), and
+  `testMode.ts` reads it. Production never injects it, so `?area=` is ignored
+  and walking speed is normal.
+- `webServer.env` in `playwright.config.ts` runs the suite on a fast clock,
+  all of it e2e-only:
+  - `GRANGE_GROW_MS=100` → `Farm.grow_ms/0`: a crop ripens in 100ms, not 10s.
+  - `GRANGE_TICK_MS=100` → the `FarmTicker` sweep interval, so a watered crop is
+    ready on the next sweep instead of the next second.
+  - `GRANGE_FAST_HASH=1` → the cheap Argon2 parameters `test.exs` uses. The
+    suite registers ~50 accounts, and production hashing is a measurable slice
+    of that.
+  - The test-mode `WALK_SPEED_MULTIPLIER` (in `testMode.ts`) is **3x**, so a
+    `holdKeys` leg covers three times the ground.
+  - Wall-clock animations use `e2eMs(real, fast)` from `testMode.ts`: train
+    travel 2s → 500ms, roulette spin 4.2s → 1s, slots spin 1.8s → 500ms,
+    auto-spin delay 900ms → 200ms. Do not assert transient "spinning" copy:
+    the shortened animation can settle before Playwright reads it, and the
+    settled result is the assertion that matters.
+- `waitForWorld` waits for the canvas and `[data-world-ready="true"]`. Do not
+  add `waitForLoadState("networkidle")` — it is slower and redundant. The flag
+  needs `engineReady`, the joined farm snapshot, and (on your own farm) the
+  hydrated inventory; the engine reports ready as soon as its first scene is
+  active, so a world that boots into a hub is ready too.
 - Tile interactions use `clickFarmTile` / `hoverFarmTile`, which map tile
   coordinates to page pixels using `MAP_COLUMNS`/`MAP_ROWS`.
-- Walking tests use `walkUntilPrompt` and the `travel-prompt` testid.
+- Walking tests use `walkUntilPrompt` and the `travel-prompt` testid. Use
+  `holdKeys` only for short geometry legs between prompts, never as a
+  stand-in for "walk until the prompt appears".
+- `walkUntilPrompt` polls every 40ms and releases the movement keys *inside*
+  the page as soon as the prompt matches. Do not "improve" that back into a
+  release over the wire: the canvas runs at a few frames per second on a loaded
+  runner, so a late release walks the player out of neighbouring interaction
+  radii (the casino's poker and slot radii overlap). Both helpers also re-send
+  their keydown while they hold, because a keydown delivered while a scene is
+  still paused after a DOM overlay closes is dropped.
+- Boarding is two steps: the prompt reads `board the train`, then `rideTrain(page,
+  destinationId)` presses `E` and clicks `travel-option-<id>` (`marketplace`,
+  `home`, `farm-<owner>`).
+- Trains, overlays, and hub easing still cost real time on a busy runner, so
+  scene-change assertions after a ride use `TRAVEL_TIMEOUT` (30s) instead of
+  Playwright's 5s default.
+- Multiplayer tests use the `twoPlayers` fixture (`multiplayerTest as test`) —
+  it creates two isolated contexts and always closes them, including on
+  failure. `waitForHubPeer`/`waitForHubPeerGone` read `data-hub-peers`;
+  `waitForFarmPeer`/`waitForFarmPeerGone` read `data-farm-peers`; the house
+  menu uses `house-menu` / `house-visibility-toggle` / `house-edit-toggle`.
+- One spec file per feature, not per overlay: `casino.spec.ts` is four
+  deep-linked tests (one per table), not four files that each re-walk the
+  world.
 - e2e runs against the **built** SPA served by Phoenix on port 3201, not Vite.
 - `pnpm test:e2e` runs `vite build` first. If you changed frontend code, do not
   run Playwright without rebuilding.
-- Tests are serial (`workers: 1`), with a 60s per-test timeout.
+- The suite runs `fullyParallel` with **2 workers by default**
+  (`workers: Number(process.env.E2E_WORKERS ?? 2)`); CI sets `E2E_WORKERS=3`
+  because the runner has 4 vCPUs. A faster local machine started at its own core
+  count just saturates the CPU and makes every walk slower than it is with two;
+  raise `E2E_WORKERS` to experiment. The per-test timeout is 90s (the longest
+  paths, like the casino, set their own larger budget).
 
 ### 10.4 CI
 
@@ -791,7 +1070,8 @@ reason (the repo already has one for a deliberate hook dependency).
 3. `pnpm lint:backend`
 4. Install Chromium.
 5. `pnpm check` (lint, Vitest, ExUnit, build).
-6. `pnpm test:e2e`.
+6. `pnpm test:e2e:run` (Playwright only). `pnpm check` already ran `pnpm build`,
+   so the e2e step must not rebuild; CI also sets `E2E_WORKERS=3`.
 
 The required status check name is **`test`**; renaming the job silently
 removes the required check from the ruleset. There is also a `secrets` job that
@@ -822,8 +1102,8 @@ runs Gitleaks.
 6. Update `notes/farming-mechanics.md` and the crop table in this file.
 7. Add/extend tests in `backend/test/grange/crops_test.exs` and relevant
    `src/world/*.test.ts`. Consider an e2e case for the full grow loop.
-8. Check whether `src/world/farmState.ts` or `farmActions.ts` needs a
-   crop-specific branch (most behavior is registry-driven).
+8. Check whether `src/world/farmActions.ts` needs a crop-specific branch (most
+   behavior is registry-driven).
 
 ### 11.2 Add an inventory item
 
@@ -886,8 +1166,9 @@ runs Gitleaks.
 1. Extend `WalkingScene` for a standard walkable area, or `ex.Scene` if it needs
    custom behavior.
 2. Add a `*Data.ts` module for terrain, props, spawn points, and entrances.
-3. Add a `*Resources.ts` module and register images in the world's resource
-   list (or `resources.ts`).
+3. Add a `*Resources.ts` module with its image sources, then add the scene to
+   `WorldSceneName` and to `sceneAssets` in `worldAssets.ts`. A scene that is
+   not in `sceneAssets` cannot boot or be travelled to safely.
 4. Define walk obstacles in `sceneObstacles.ts` using `propObstacles`.
 5. Register the scene with `engine.addScene(...)` in `src/world/FarmMap.tsx`.
 6. Add a `SceneInteraction` with `destination` and `destinationSpawn`; extend
@@ -935,16 +1216,16 @@ runs Gitleaks.
    hard-code 5.
 8. **`farms.tomatoes` is legacy.** Harvests write `barn_items`; `view.tomatoes`
    is derived from `barn["tomato"]`. Do not add new writes to the column.
-9. **Rare mutation seeds are client-only right now.** The server rolls them but
-   the channel discards the returned `drops`; the client persists them in the
-   browser inventory only.
+9. **Rare mutation seeds are server-rolled.** `FarmStore` persists drops in the
+   actor's inventory and returns them in the `farmAction` ack; the client only
+   displays them. Do not re-add a client-side roll.
 10. **The combo tracker is client-only.** The server receives only
     `comboMutationMultiplier` (1 or 1.5) and maps it to combo count 15 for the
     drop formula.
-11. **Passive watering / moisture retention is only fully modeled client-side.**
-    `Crops` exposes `passive_water` and the client simulation applies it, but
-    `FarmStore` does not yet water neighbors on a tick. Do not assume the
-    server will do it.
+11. **Passive watering / moisture retention is not modeled at all.** `Crops`
+    exposes `passive_water` and the client registry exposes the decay
+    multiplier, but `FarmStore` does not water neighbors on a tick and the
+    client does not simulate growth. Do not assume either side applies it.
 12. **`FarmStore` is not a GenServer.** It is a plain module using Ecto. Only
     `FarmTicker` is a GenServer.
 13. **SQLite is single-writer.** Dev/test use `pool_size: 1`; prod defaults to
@@ -969,23 +1250,55 @@ runs Gitleaks.
 22. **Moving props are indexed by source order.** `FarmProps.@assets` must
     match `props` in `mapData.ts`. Reordering props without updating both
     corrupts dig/place behavior.
-23. **Assets are loaded through `ImageSource`.** Add new images to the relevant
-    resource array or they render blank. Paths are relative to `/assets/`.
+23. **Assets are loaded through `ImageSource`, one scene at a time.** Add new
+    images to the relevant resource array *and* to that scene's group in
+    `worldAssets.ts`, or they render blank. Paths are relative to `/assets/`.
 24. **Keep e2e testids stable.** Renaming `farm-tile`, `travel-prompt`,
     `slot-hotbar-N`, `farm-balance`, etc. breaks tests.
 25. **`shared/auth.ts` has unused-looking fields.** `User.createdAt` is never
     sent by the backend (the server sends `inserted_at`), and `passwordHash` is
     server-only. Use `AuthUser` fields that actually exist.
-26. **`FARM_HARVEST_YIELD` / `Farm.harvest_yield/0` are unused.** Harvests add
-    1 produce item.
+26. **`Farm.harvest_yield/0` is unused.** Harvests add 1 produce item.
 27. **Do not edit `backend/priv/static`** — it is generated by `vite build` and
     gitignored.
 28. **`repo-sanity` only sees committed files.** A new junk file can pass a
     local run until staged; still keep the tree clean.
-29. **Planting consumes a seed before the server acks.** `performFarmAction`
-    decrements the local seed count, then emits `farmAction`; a rejected plant
-    loses that seed. This is the one intentional optimistic mutation — don't
-    copy the pattern for tiles or barn counts.
+29. **The server spends seeds before acking.** `performFarmAction` emits the
+    action without mutating local seeds, then `hydrateSeeds(res.seeds)` applies
+    the authoritative counts from the ack. A rejected action never eats a seed.
+30. **Hub presence is ephemeral and cosmetic.** Marketplace/casino players are
+    tracked in memory by `GrangeWeb.Presence` (no table, no migration) and their
+    positions are clamped, not simulated. Never trust a hub position for
+    gameplay decisions.
+31. **Farms are not hubs.** `FarmMapScene` does not extend `WalkingScene` and
+    must never join `hub:*`; only scenes that pass `hubArea` are multiplayer.
+32. **One avatar per account.** Hub presence is keyed by username; a second tab
+    adds another meta, and the client renders only the newest `at`. Don't switch
+    to a per-socket key without updating `hubClient.readPeers`.
+33. **Remote avatars are visual only.** They are not in `walkCollisions` or
+    `sceneObstacles`; players walk through each other by design. Their sprites
+    and name labels use `depthForY(y)` from `src/world/depth.ts`, the same
+    `100 + floor(y)` band as props, so a player below a building draws in front
+    of it and a player above draws behind it.
+34. **Farm settings default to private and read-only.** New and existing farms
+    get `is_public: false` and `visitor_edit: false`; the migration backfills
+    both flags.
+35. **Farm presence lives on `farm:<owner>`.** There is no separate farm-presence
+    channel or table. It uses the same `GrangeWeb.Presence` tracker and the same
+    username-keyed metas as hubs, so one account still renders one avatar.
+36. **Visibility and editing are different gates.** `is_public` only controls
+    new joins; `visitor_edit` controls actions and is re-read per action.
+    Turning a farm private never disconnects current visitors.
+37. **Visitor actions are actor-aware.** Seeds and mutation drops belong to the
+    acting user; harvested produce belongs to the farm owner. Do not collapse
+    actor and owner when adding a new action.
+38. **Never use Excalibur's `delta` for gameplay timing.** The engine clock
+    rewrites any frame longer than 200ms to 1ms, so a starved browser plays in
+    slow motion (a 2s train ride or a walk across the farm can take minutes).
+    `FrameClock` from `src/world/frameClock.ts` reports the real wall-clock step
+    capped at 100ms and is identical to `delta` at normal frame rates. Take one
+    step per `onPreUpdate` and pass it down; do not call `step()` twice in a
+    frame.
 
 ---
 
@@ -1015,21 +1328,36 @@ them silently as part of an unrelated change; mention them in the PR.
 
 - Settings, whitelist management, and some market tabs (`tools`, `train`) are
   stubs.
-- Rare mutation seeds are not persisted server-side.
-- Server-side passive watering for Frost-Crisp Lettuce is not implemented.
-- Server growth calculation does not include lettuce moisture retention, while
-  the client `LocalFarmStore` does.
+- Rare mutation seeds are persisted server-side, but Sun-Burst Tomato's extra
+  10% seed is declared and never rolled.
+- Server-side passive watering for Frost-Crisp Lettuce is not implemented, and
+  nothing else models it either (the old client-local simulation is gone).
+- Server growth calculation does not include lettuce moisture retention; the
+  registry constant exists but no code path applies it.
 - `FarmStore` uses direct Ecto reads/writes; `notes/sqlite-plan.md`’s
   write-behind cache design is outdated.
 - `farms.tomatoes` remains for compatibility and is read by the dashboard and
   farm HUD.
-- `FARM_HARVEST_YIELD` and `Farm.harvest_yield/0` are dead constants.
+- `Farm.harvest_yield/0` is a dead constant.
 - `User.createdAt` in `shared/auth.ts` does not match the server payload.
 - The economy trusts client-supplied deltas; it is a game, not a ledger.
 - Casino games are entirely client-side; only the resulting wallet delta is
   synced.
 - The farm’s rendered field is a small patch, but the server accepts a 15×15
   action area.
+- Hub avatars do not collide with each other or with the local player.
+- Hub movement is sent at ~10 Hz and eased client-side, so remote players can
+  appear slightly behind their true position; there is no interpolation buffer
+  or lag compensation.
+- Hub presence is per area: a player in the casino is invisible to players in
+  the marketplace, and players on their farms are in no hub at all.
+- Farm presence is cosmetic only: no collision, chat, emotes, or persistence.
+- A private farm can still be reached by someone already inside; there is no
+  kick and no in-place reconnect, and the client keeps the old snapshot.
+- Turning `visitor_edit` off blocks the next action but does not cancel one
+  already inside `FarmStore.action/3`.
+- The dashboard and train menu filter on the last lobby snapshot, so a farm that
+  flips private can linger in an open tab until the next `farms` push.
 
 ---
 
@@ -1037,6 +1365,8 @@ them silently as part of an unrelated change; mention them in the PR.
 
 - `README.md` — setup, database location, tests, deploy.
 - `notes/farming-mechanics.md` — crop/mechanic reference and asset mapping.
+- `notes/hub-multiplayer.md` — hub channel, presence, rendering, tuning.
+- `notes/farm-multiplayer.md` — farm settings, visitor rules, farm presence.
 - `notes/change-policy.md` — branch/PR/review policy.
 - `notes/WireFrameLayout.md` — HUD/menu/inventory layout intent.
 - `notes/GameDesignNotes.md` — high-level game direction.

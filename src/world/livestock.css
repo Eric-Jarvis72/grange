@@ -1,0 +1,51 @@
+.livestock-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 50;
+	display: grid;
+	place-items: center;
+	background: rgba(25, 16, 9, 0.42);
+}
+
+.livestock-card {
+	position: relative;
+	width: min(320px, calc(100vw - 32px));
+	padding: 16px 20px 20px;
+	border: 3px solid #7f4d22;
+	border-radius: 12px;
+	background: #f4dfb9;
+	box-shadow: 0 12px 30px #21150b88;
+	color: #3a2415;
+	text-align: center;
+}
+
+.livestock-card h2 { margin: 2px 0 0; font-size: 1.4rem; }
+.livestock-card p { margin: 7px 0; }
+.livestock-price { font-size: 1.25rem; font-weight: 800; }
+.livestock-portrait { width: 106px; height: 94px; object-fit: contain; image-rendering: pixelated; }
+.livestock-message { min-height: 1.2em; font-weight: 700; }
+
+.livestock-close {
+	position: absolute;
+	top: 4px;
+	right: 8px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font-size: 1.6rem;
+	cursor: pointer;
+}
+
+.livestock-buy {
+	width: 100%;
+	margin-top: 8px;
+	padding: 9px;
+	border: 2px solid #764419;
+	border-radius: 8px;
+	background: #a9c35d;
+	color: #21190e;
+	font-weight: 800;
+	cursor: pointer;
+}
+
+.livestock-buy:disabled { opacity: 0.55; cursor: not-allowed; }

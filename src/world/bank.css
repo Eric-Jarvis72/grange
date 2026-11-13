@@ -1,0 +1,9 @@
+.bank-overlay { position: absolute; inset: 0; z-index: 55; display: grid; place-items: center; background: #22170c99; }
+.bank-window { position: relative; width: min(360px, calc(100vw - 32px)); padding: 20px; border: 3px solid #79502a; border-radius: 12px; background: #f3dfb8; color: #382616; text-align: center; box-shadow: 0 16px 36px #140c0888; }
+.bank-window img { height: 90px; max-width: 110px; object-fit: contain; image-rendering: pixelated; }
+.bank-window h2 { margin: 4px 0 10px; }
+.bank-window label { display: block; }
+.bank-window input { width: 100%; padding: 8px; margin: 6px 0 10px; box-sizing: border-box; }
+.bank-window button:not(.bank-close) { padding: 8px 14px; margin: 4px; border: 2px solid #79502a; border-radius: 6px; background: #abc36c; font-weight: bold; cursor: pointer; }
+.bank-window button:disabled { opacity: .55; cursor: not-allowed; }
+.bank-close { position: absolute; top: 5px; right: 9px; border: 0; background: transparent; font-size: 1.6rem; cursor: pointer; }

@@ -26,6 +26,7 @@ import {
 	setFarmPropObstacles,
 } from "./sceneObstacles";
 import { moveAroundObstacles, type WalkObstacle } from "./walkCollisions";
+import { MAX_INTERACTION_DISTANCE } from "./interaction";
 
 const wall: WalkObstacle = { left: 100, right: 200, top: 100, bottom: 200 };
 
@@ -133,7 +134,7 @@ describe("walking collisions", () => {
 			),
 		).toBe(false);
 		for (const table of [CASINO_BLACKJACK_TABLE, CASINO_ROULETTE_TABLE]) {
-			const approach = { x: table.x, y: table.y - 90 - 12 };
+			const approach = { x: table.x, y: table.y - 70 - 12 };
 			expect(
 				casinoWalkObstacles.some((box) =>
 					overlaps(approach.x, approach.y, box),
@@ -141,7 +142,7 @@ describe("walking collisions", () => {
 			).toBe(false);
 			expect(
 				Math.hypot(approach.x - table.x, approach.y - table.y),
-			).toBeLessThan(115);
+			).toBeLessThan(MAX_INTERACTION_DISTANCE);
 		}
 	});
 

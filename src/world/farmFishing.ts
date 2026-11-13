@@ -9,6 +9,7 @@ import { isNearWater } from "./mapData";
  */
 export class FarmFishing {
 	private travel: string | null = null;
+	private ride: string | null = null;
 	private ready = false;
 	private paused = false;
 	private published: string | null = null;
@@ -27,6 +28,12 @@ export class FarmFishing {
 	/** Routes the train travel prompt so fishing can defer to it. */
 	setTravelPrompt(prompt: string | null): void {
 		this.travel = prompt;
+		this.flush();
+	}
+
+	/** Routes the horse mount prompt, which outranks fishing but not travel. */
+	setRidePrompt(prompt: string | null): void {
+		this.ride = prompt;
 		this.flush();
 	}
 
@@ -53,7 +60,7 @@ export class FarmFishing {
 	}
 
 	private flush(): void {
-		const next = this.travel ?? (this.ready ? "Press E to fish" : null);
+		const next = this.travel ?? this.ride ?? (this.ready ? "Press E to fish" : null);
 		if (next === this.published) return;
 		this.published = next;
 		this.publish(next);

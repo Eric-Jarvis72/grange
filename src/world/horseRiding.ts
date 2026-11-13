@@ -1,10 +1,8 @@
 import * as ex from "excalibur";
-import { updateFarmerGraphics } from "./farmerSprite";
 import { type Horse, spawnHorses } from "./horse";
 import type { HorseSpawn } from "./horseData";
 import { nearestWithin } from "./horseLogic";
 import type { InputManager, InputVector } from "./InputManager";
-import { updateFarmPlayer } from "./playerMovement";
 import type { WalkObstacle } from "./walkCollisions";
 
 /** How close the player must stand to mount a wandering horse. */
@@ -14,10 +12,11 @@ const MOUNT_RANGE = 70;
 const DISMOUNT_STEP_Y = 14;
 
 /**
- * Owns the farm herd and the mount/dismount interaction. Off a horse it walks
- * and animates the farmer exactly as before; while mounted the horse takes the
- * player's input (walking in all directions, flipping and animating) and the
- * farmer is hidden, riding along at the horse's position.
+ * Owns the farm herd and the mount/dismount interaction. While mounted the
+ * horse takes the player's input (walking in all directions, flipping and
+ * animating) and the farmer is hidden, riding along at the horse's position.
+ * Walking on foot stays with `FarmMapScene` so it can keep the camera, terrain
+ * bounds, and depth handling it already owns.
  */
 export class HorseRiding {
 	private horses: Horse[] = [];
@@ -43,29 +42,34 @@ export class HorseRiding {
 	}
 
 	/**
-	 * Runs one frame of mount/dismount input and drives the player or their
-	 * horse. Call after the gate/train checks so the ride prompt wins when the
-	 * player is standing beside a horse.
+	 * Drives the ridden horse for one frame. Returns true while a horse is
+	 * mounted so the caller can skip on-foot movement.
 	 */
-	update(
+	ride(
 		player: ex.Actor,
-		input: InputManager,
 		direction: InputVector,
 		delta: number,
-		speedMultiplier: number,
-	): void {
+		speedMultiplier = 1,
+	): boolean {
+		const horse = this.ridden;
+		if (!horse) return false;
+		horse.ride(direction, delta, speedMultiplier);
+		player.pos = horse.pos.clone();
+		player.graphics.visible = false;
+		return true;
+	}
+
+	/**
+	 * Runs mount/dismount input and prompts the nearest horse. Call after the
+	 * gate, train, house, and barn interactions so their E press wins.
+	 */
+	update(player: ex.Actor, input: InputManager): void {
 		const horse = this.ridden;
 		if (horse) {
-			horse.ride(direction, delta, speedMultiplier);
-			player.pos = horse.pos.clone();
-			player.graphics.visible = false;
 			this.setPrompt("Press E or Enter to dismount");
 			if (input.consumePress("KeyE", "Enter")) this.dismount(player);
 			return;
 		}
-
-		updateFarmPlayer(player, direction, delta, speedMultiplier);
-		updateFarmerGraphics(player, direction);
 
 		const mountable = this.mountNearest(player.pos);
 		this.setPrompt(mountable ? "Press E or Enter to ride a horse" : null);

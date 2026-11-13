@@ -13,6 +13,8 @@ defmodule Grange.User do
     field(:email, :string)
     field(:password_hash, :string)
     field(:balance, :integer, default: @starting_balance)
+    field(:bank_balance, :integer, default: 0)
+    field(:email_verified_at, :utc_datetime_usec)
     field(:is_admin, :boolean, default: false)
     timestamps(type: :utc_datetime_usec, updated_at: false)
   end
@@ -24,6 +26,8 @@ defmodule Grange.User do
           password_hash: String.t(),
           inserted_at: DateTime.t() | nil,
           balance: non_neg_integer(),
+          bank_balance: non_neg_integer(),
+          email_verified_at: DateTime.t() | nil,
           is_admin: boolean()
         }
 
@@ -69,6 +73,8 @@ defimpl Jason.Encoder, for: Grange.User do
         email: user.email,
         inserted_at: iso8601(user.inserted_at),
         balance: user.balance,
+        bank_balance: user.bank_balance,
+        emailVerifiedAt: iso8601(user.email_verified_at),
         is_admin: user.is_admin
       },
       opts

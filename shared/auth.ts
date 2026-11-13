@@ -5,6 +5,7 @@ export interface User {
 	passwordHash: string;
 	createdAt: string;
 	balance: number;
+	emailVerifiedAt: string | null;
 	/** Admins get every item and effectively unlimited money. Dev-only flag. */
 	is_admin: boolean;
 }

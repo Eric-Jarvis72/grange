@@ -4,14 +4,16 @@ import { MAX_BET, SLOT_BETS, SLOT_SYMBOLS, symbolDef } from "./slots";
 import { SlotMachine } from "./slotsGame";
 import { SlotsReels } from "./SlotsReels";
 import type { Bank, SlotsSnapshot } from "./slotsTypes";
+import { e2eMs } from "./testMode";
 import "./slots.css";
 
 interface SlotsOverlayProps {
 	onClose: () => void;
 }
 
-/** Pause after a round before an auto-spin fires, so the result is readable. */
-const AUTO_DELAY_MS = 900;
+/** Pause after a round before an auto-spin fires, so the result is readable.
+ * E2E shortens it so a three-spin assertion does not cost three seconds. */
+const AUTO_DELAY_MS = e2eMs(900, 200);
 
 const SPECIAL_SEQUENCE = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 

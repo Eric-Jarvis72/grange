@@ -9,18 +9,24 @@ const farm: ActiveFarm = {
 	tiles: [],
 	tomatoes: 0,
 	barn: {},
+	animals: {},
+	is_public: false,
+	visitor_edit: false,
 	fences: [],
 	fence_count: 1,
 	gates: [],
 	gate_count: 1,
+	sprinklers: [],
+	sprinkler_count: 0,
 	prop_overrides: [],
 	prop_inventory: {},
+	storage: {},
 };
 const player = { x: 800, y: 600 };
 
 describe("fence placement after gate integration", () => {
-	it("permits a clear path tile", () => {
-		expect(terrainAt(5, 4)).toBe("path-horizontal");
+	it("permits a clear grass tile", () => {
+		expect(terrainAt(5, 4)).toBe("grass");
 		expect(fencePlacementReason(farm, 5, 4, new BlockRegistry(), player)).toBeNull();
 	});
 

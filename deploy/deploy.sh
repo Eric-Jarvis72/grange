@@ -32,6 +32,30 @@ fi
 sed -i '/^PHX_HOST=/d' "$ENV_FILE"
 printf 'PHX_HOST=%s\n' "$HOST" >> "$ENV_FILE"
 
+# Carry the Mailtrap credentials from the workflow's GitHub secrets into the env
+# file. Each is only rewritten when provided, so a manually-managed value is not
+# clobbered by a deploy that does not set that secret. MAILTRAP_FROM is accepted
+# as a fallback From address for older secret setups.
+set_env_var() {
+  sed -i "/^$1=/d" "$ENV_FILE"
+  printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
+}
+
+if [ -n "${MAILTRAP_API_TOKEN:-}" ]; then
+  set_env_var MAILTRAP_API_TOKEN "$MAILTRAP_API_TOKEN"
+fi
+
+FROM_EMAIL="${MAIL_FROM_EMAIL:-${MAILTRAP_FROM:-}}"
+if [ -n "$FROM_EMAIL" ]; then
+  set_env_var MAIL_FROM_EMAIL "$FROM_EMAIL"
+fi
+
+if [ -n "${MAIL_FROM_NAME:-}" ]; then
+  set_env_var MAIL_FROM_NAME "$MAIL_FROM_NAME"
+fi
+
+chmod 600 "$ENV_FILE"
+
 # One-time migration: previous releases kept the database inside the release
 # directory (<release>/data/grange.sqlite3). If the new location is still empty
 # but the legacy file exists, carry it over so existing data survives the move.

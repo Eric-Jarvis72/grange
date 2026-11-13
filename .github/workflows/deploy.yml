@@ -65,4 +65,14 @@ jobs:
           rsync -az deploy/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh"
 
       - name: Restart
-        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" "APP_PORT=$APP_PORT APP_HOST=$DEPLOY_HOST bash $DEPLOY_PATH/deploy.sh"
+        env:
+          MAILTRAP_API_TOKEN: ${{ secrets.MAILTRAP_API_TOKEN }}
+          MAIL_FROM_EMAIL: ${{ secrets.MAIL_FROM_EMAIL }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "APP_PORT=$APP_PORT APP_HOST=$DEPLOY_HOST \
+             MAILTRAP_API_TOKEN='${MAILTRAP_API_TOKEN}' \
+             MAIL_FROM_EMAIL='${MAIL_FROM_EMAIL}' \
+             MAIL_FROM_NAME='${MAIL_FROM_NAME}' \
+             bash $DEPLOY_PATH/deploy.sh"

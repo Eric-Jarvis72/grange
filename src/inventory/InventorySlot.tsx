@@ -1,9 +1,17 @@
-import { getItemDef } from "./items";
+import {
+	type BarnDragPayload,
+	BARN_DRAG_TYPE,
+	parseBarnPayload,
+	parseSlotRef,
+	serializeSlotRef,
+	SLOT_DRAG_TYPE,
+} from "./dragTypes";
 import {
 	useInventoryStore,
 	type SlotArea,
 	type SlotRef,
 } from "./inventoryStore";
+import { getItemDef } from "./items";
 import { SlotIcon } from "./SlotIcon";
 
 interface Props {
@@ -11,32 +19,16 @@ interface Props {
 	index: number;
 	selected?: boolean;
 	keyHint?: string;
+	/** Called when a stack is dropped from barn storage onto this slot. */
+	onReceiveBarn?: (payload: BarnDragPayload) => void;
 }
 
-function dragPayload(ref: SlotRef): string {
-	return JSON.stringify(ref);
-}
-
-function parsePayload(raw: string): SlotRef | null {
-	try {
-		const parsed = JSON.parse(raw) as SlotRef;
-		if (
-			(parsed.area === "grid" || parsed.area === "hotbar") &&
-			Number.isInteger(parsed.index)
-		) {
-			return parsed;
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
-
-export function InventorySlot({ area, index, selected, keyHint }: Props) {
+export function InventorySlot({ area, index, selected, keyHint, onReceiveBarn }: Props) {
 	const slot = useInventoryStore((s) =>
 		area === "grid" ? s.grid[index] : s.hotbar[index],
 	);
 	const moveStack = useInventoryStore((s) => s.moveStack);
+	const quickMove = useInventoryStore((s) => s.quickMove);
 	const splitHalf = useInventoryStore((s) => s.splitHalf);
 	const selectHotbar = useInventoryStore((s) => s.selectHotbar);
 
@@ -48,7 +40,7 @@ export function InventorySlot({ area, index, selected, keyHint }: Props) {
 			e.preventDefault();
 			return;
 		}
-		e.dataTransfer.setData("application/x-grange-slot", dragPayload(ref));
+		e.dataTransfer.setData(SLOT_DRAG_TYPE, serializeSlotRef(ref));
 		e.dataTransfer.effectAllowed = "move";
 	}
 
@@ -59,12 +51,21 @@ export function InventorySlot({ area, index, selected, keyHint }: Props) {
 
 	function onDrop(e: React.DragEvent) {
 		e.preventDefault();
-		const raw = e.dataTransfer.getData("application/x-grange-slot");
-		const from = parsePayload(raw);
-		if (from) moveStack(from, ref);
+		const from = parseSlotRef(e.dataTransfer.getData(SLOT_DRAG_TYPE));
+		if (from) {
+			moveStack(from, ref);
+			return;
+		}
+		const barn = parseBarnPayload(e.dataTransfer.getData(BARN_DRAG_TYPE));
+		if (barn) onReceiveBarn?.(barn);
 	}
 
-	function onClick() {
+	function onClick(e: React.MouseEvent) {
+		// Shift-click flings the whole stack to the other area (hotbar <-> grid).
+		if (e.shiftKey) {
+			quickMove(ref);
+			return;
+		}
 		if (area === "hotbar") selectHotbar(index);
 	}
 
@@ -89,7 +90,9 @@ export function InventorySlot({ area, index, selected, keyHint }: Props) {
 		<button
 			type="button"
 			aria-label={
-				def ? `${def.name}${slot.count > 1 ? ` × ${slot.count}` : ""}` : "Empty slot"
+				def
+					? `${def.name}${slot.count > 1 ? ` × ${slot.count}` : ""}`
+					: "Empty slot"
 			}
 			data-testid={`slot-${area}-${index}`}
 			data-item={slot.itemId ?? ""}

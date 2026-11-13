@@ -6,6 +6,7 @@ export interface TransactionResult {
 
 export class EconomyManager {
   private balance: number;
+  private admin = false;
   private listeners: Set<(balance: number) => void> = new Set();
   private onChange: ((delta: number) => void) | null = null;
 
@@ -15,6 +16,20 @@ export class EconomyManager {
 
   getBalance(): number {
     return this.balance;
+  }
+
+  /**
+   * Marks the wallet as belonging to an admin, whose Grangecoin is effectively
+   * unlimited: every purchase is affordable and none of them draw the balance
+   * down. `resetAdmin` (or `setAdmin(false)`) restores normal spending, which
+   * happens on sign-out so admin funds cannot leak to the next account.
+   */
+  setAdmin(isAdmin: boolean): void {
+    this.admin = isAdmin;
+  }
+
+  isAdmin(): boolean {
+    return this.admin;
   }
 
   /**
@@ -52,9 +67,11 @@ export class EconomyManager {
   }
 
   /**
-   * Validation logic for buying seeds, tools, or land.
+   * Validation logic for buying seeds, tools, or land. Admins can afford any
+   * finite amount; everyone else is bounded by their balance.
    */
   canAfford(cost: number): boolean {
+    if (this.admin) return Number.isFinite(cost);
     return Number.isFinite(cost) && this.balance >= cost;
   }
 
@@ -75,6 +92,12 @@ export class EconomyManager {
     }
     if (!this.canAfford(cost)) {
       return { success: false, balance: this.balance, error: "Insufficient funds" };
+    }
+
+    // Admins never run out: the purchase succeeds without spending or
+    // reporting a delta, so the server's admin balance is never drawn down.
+    if (this.admin) {
+      return { success: true, balance: this.balance };
     }
 
     this.balance -= cost;

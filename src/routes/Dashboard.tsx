@@ -15,7 +15,7 @@ export default function Dashboard() {
 	}, []);
 
 	const mine = farms.find((f) => f.owner === username);
-	const others = farms.filter((f) => f.owner !== username);
+	const others = farms.filter((f) => f.owner !== username && f.is_public);
 
 	async function onLogout() {
 		await logout();

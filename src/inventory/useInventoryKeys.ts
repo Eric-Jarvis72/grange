@@ -10,6 +10,7 @@ export function useInventoryKeys(): void {
 	const selectHotbar = useInventoryStore((s) => s.selectHotbar);
 	const toggleInventory = useInventoryStore((s) => s.toggleInventory);
 	const setInventoryOpen = useInventoryStore((s) => s.setInventoryOpen);
+	const setBarnOpen = useInventoryStore((s) => s.setBarnOpen);
 	const togglePause = usePauseStore((s) => s.togglePause);
 
 	useEffect(() => {
@@ -30,7 +31,9 @@ export function useInventoryKeys(): void {
 
 			if (e.code === "Escape") {
 				e.preventDefault();
-				if (useInventoryStore.getState().inventoryOpen) {
+				if (useInventoryStore.getState().barnOpen) {
+					setBarnOpen(false);
+				} else if (useInventoryStore.getState().inventoryOpen) {
 					setInventoryOpen(false);
 				} else {
 					togglePause();
@@ -40,6 +43,8 @@ export function useInventoryKeys(): void {
 
 			// Menus capture the rest: no tool selection while paused/opening UI.
 			if (usePauseStore.getState().paused) return;
+			// The barn window already shows the inventory; keep hotkeys out.
+			if (useInventoryStore.getState().barnOpen) return;
 
 			if (/^Digit[0-9]$/.test(e.code) || /^Numpad[0-9]$/.test(e.code)) {
 				const digit = Number(
@@ -61,6 +66,7 @@ export function useInventoryKeys(): void {
 		selectHotbar,
 		toggleInventory,
 		setInventoryOpen,
+		setBarnOpen,
 		togglePause,
 	]);
 }

@@ -7,6 +7,7 @@ defmodule GrangeWeb.UserSocket do
 
   channel("lobby", GrangeWeb.LobbyChannel)
   channel("farm:*", GrangeWeb.FarmChannel)
+  channel("hub:*", GrangeWeb.HubChannel)
 
   @impl true
   def connect(params, socket, _connect_info) do

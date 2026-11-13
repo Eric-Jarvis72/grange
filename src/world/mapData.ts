@@ -1,8 +1,27 @@
+import { MAX_INTERACTION_DISTANCE } from "./interaction";
+
 export const TILE_SIZE = 64;
 export const MAP_COLUMNS = 18;
 export const MAP_ROWS = 12;
 export const MAP_WIDTH = MAP_COLUMNS * TILE_SIZE;
 export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;
+
+/** Each purchase adds a two-tile band outside the original farm. */
+export const LAND_PRICES = [250, 500, 1000, 2000] as const;
+export function farmBounds(level: number) {
+	return {
+		minColumn: level >= 2 ? -2 : 0,
+		maxColumn: level >= 3 ? 19 : 17,
+		minRow: level >= 4 ? -4 : level >= 1 ? -2 : 0,
+		maxRow: 11,
+	};
+}
+export function ownsFarmTile(column: number, row: number, level: number): boolean {
+	const bounds = farmBounds(level);
+	return Number.isInteger(column) && Number.isInteger(row) &&
+		column >= bounds.minColumn && column <= bounds.maxColumn &&
+		row >= bounds.minRow && row <= 9;
+}
 
 export type TerrainKey =
 	| "grass"
@@ -106,6 +125,8 @@ export function worldToFieldTile(
 }
 
 export const FARM_PLAYER_SPAWN = { x: 576, y: 620 } as const;
+/** How close the owner must stand to the farmhouse to open its settings. */
+export const FARM_HOUSE_REACH = 120;
 export const FARM_TRAIN_STOP = { x: 810, y: 600 } as const;
 export const FARM_TRAIN_ENGINE_STOP = { x: 1070, y: 600 } as const;
 /** Where the player steps off when arriving at the farm by train: just above
@@ -118,16 +139,14 @@ export function isNearFarmTrain(x: number, y: number): boolean {
 		FARM_TRAIN_STOP.x,
 		Math.min(x, FARM_TRAIN_ENGINE_STOP.x),
 	);
-	return Math.hypot(x - nearestX, y - FARM_TRAIN_STOP.y) <= 115;
+	return Math.hypot(x - nearestX, y - FARM_TRAIN_STOP.y) <=
+		MAX_INTERACTION_DISTANCE;
 }
 
 /** Edit these rules to redraw the 64px terrain grid. */
 export function terrainAt(column: number, row: number): TerrainKey {
 	if (row === 11) return "water";
 	if (row === 10) return "shore-north";
-	if (column === 4 && row === 4) return "path-cross";
-	if (row === 4) return "path-horizontal";
-	if (column === 4 && row < 10) return "path-vertical";
 	if ((column * 7 + row * 5) % 19 === 0) return "grass-flowers";
 	if ((column * 3 + row * 11) % 8 === 0) return "grass-tufts";
 	return "grass";

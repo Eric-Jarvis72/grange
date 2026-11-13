@@ -6,15 +6,14 @@ import type { WorldArea } from "./WalkingScene";
 
 export class FarmTravel {
 	private activePrompt: string | null = null;
-	private traveling = false;
 
 	constructor(
 		private readonly onPromptChange: (prompt: string | null) => void,
 		private readonly onAreaChange: (area: WorldArea) => void,
+		private readonly onOpenMenu: () => void,
 	) {}
 
 	activate(): void {
-		this.traveling = false;
 		this.onAreaChange("Farm");
 		this.setPrompt(null);
 	}
@@ -22,31 +21,27 @@ export class FarmTravel {
 	update(
 		player: ex.Actor,
 		input: InputManager,
-		engine: ex.Engine,
 		train: TrainController,
 		gatePrompt: string | null = null,
+		housePrompt: string | null = null,
+		onOpenHouse: (() => void) | null = null,
 	): void {
 		// A nearby gate owns the prompt and the E key while it is in range.
 		if (gatePrompt) {
 			this.setPrompt(gatePrompt);
 			return;
 		}
-		const nearTrain = isNearFarmTrain(player.pos.x, player.pos.y);
-		const canBoard = nearTrain && train.canBoard();
-		this.setPrompt(
-			canBoard ? "Press E or Enter to travel to the marketplace" : null,
-		);
-		if (!canBoard || this.traveling) return;
+		if (housePrompt && onOpenHouse) {
+			this.setPrompt(housePrompt);
+			if (input.consumePress("KeyE", "Enter")) onOpenHouse();
+			return;
+		}
+		const canBoard = isNearFarmTrain(player.pos.x, player.pos.y) && train.canBoard();
+		this.setPrompt(canBoard ? "Press E or Enter to board the train" : null);
+		if (!canBoard) return;
 		if (!input.consumePress("KeyE", "Enter")) return;
-		this.traveling = true;
 		this.setPrompt(null);
-		// Ride the train out, then hand off to the marketplace, which slides the
-		// train back in from off-screen.
-		train.depart(() => {
-			void engine.goToScene("marketplace", {
-				sceneActivationData: { trainArriving: true },
-			});
-		});
+		this.onOpenMenu();
 	}
 
 	deactivate(): void {

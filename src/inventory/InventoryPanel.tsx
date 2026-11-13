@@ -22,7 +22,7 @@ export function InventoryPanel() {
 			className="inv-backdrop"
 			onClick={onBackdropClick}
 		>
-			<div className="inv-modal">
+			<div className="inv-modal inv-modal-wide">
 				<header className="inv-header">
 					<h2>Inventory</h2>
 					<button
@@ -62,8 +62,8 @@ export function InventoryPanel() {
 							))}
 						</section>
 						<p className="inv-hint">
-							Drag to move · stacks merge · right-click a stack to split
-							half
+							Drag or shift-click to move · stacks merge · right-click a stack
+							to split half
 						</p>
 					</div>
 				</div>

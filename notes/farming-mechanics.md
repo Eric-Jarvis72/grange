@@ -70,7 +70,10 @@ the production release.
 
 - Harvesting increments the barn row for the harvested crop by 1.
 - The market's **Seed** stall sells one seed per standard crop (priced from
-  `CROPS[*].seedCost`): wheat `2c`, lettuce `4c`, tomato `8c`.
+  `CROPS[*].seedCost`): wheat `2c`, lettuce `4c`, tomato `8c`. Each seed card
+  uses the same quantity stepper as the produce sell control, capped at what the
+  player can afford and can hold, so seeds can be bought in bulk in a single
+  transaction.
 - The market's **Produce** stall sells each of the six produce items at
   `CROPS[*].sellValue`: wheat `4c`, lettuce `7c`, tomato `5c`, Midas Wheat
   `10c`, Frost-Crisp Lettuce `15c`, Sun-Burst Tomato `8c`.
@@ -112,7 +115,7 @@ The old placeholders (`farm/plants/tomato-plant.webp`, `farm/plants/wheat.webp`,
 | Crop registry, stage sprites, economy | `shared/crops.ts` |
 | Combo tiers, synergy bonuses, mutation formula | `shared/mechanics.ts` |
 | Tile model, neighbours, crop encode/decode | `shared/farm.ts` |
-| Client farm simulation (tests/local play) | `src/world/farmState.ts` |
+| Server farm simulation | `backend/lib/grange/farm.ex`, `farm_store.ex`, `farm_tick.ex` |
 | Crop + sweep rendering, resource loading | `src/world/cropLayer.ts`, `resources.ts`, `sweepFx.ts` |
 | Combo tracker + HUD counter | `src/world/comboTracker.ts`, `farmCombo.ts`, `ComboCounter.tsx` |
 | Action resolution + barn reconciler | `src/world/farmActions.ts`, `barnSync.ts` |
@@ -122,4 +125,70 @@ The old placeholders (`farm/plants/tomato-plant.webp`, `farm/plants/wheat.webp`,
 | Fence/gate graph, collision, rendering | `src/world/fenceData.ts`, `fenceRendering.ts`, `sceneObstacles.ts` |
 | Gate placement, E interaction, prompts | `src/world/fenceActions.ts`, `gateInteraction.ts`, `FarmMapScene.ts` |
 | Server barn + harvest/regrow/sell | `backend/lib/grange/farm_store.ex`, `barn_item.ex` |
+| Server tick sweep (ripen, revert untended soil) | `backend/lib/grange/farm_tick.ex` |
 | Server fence/gate persistence | `backend/lib/grange/farm_fences.ex`, `farm_gates.ex`, `farm_gate.ex` |
+
+## 7. Automation: Sprinklers & the Hardware Store
+
+- Sprinklers are bought at the **Hardware Store**, a walkable scene entered from
+  the marketplace (`POST /api/hardware/buy`, 75c each). Purchases add to
+  `farms.sprinkler_count`, which the client mirrors into the hotbar
+  (`useFarmObjectInventory.ts`).
+- A sprinkler is anchored by the top-left tile of a 2x2 block and drawn on the
+  shared corner of those four tiles (`src/world/sprinklerData.ts`). While it
+  stands, every `planted` tile in its square is watered by `FarmStore.tick/1`
+  (via `Grange.FieldWater`), using the same synergy-adjusted growth clock as a
+  watering can, so crops keep ripening. A `ready` tile is never re-watered.
+  Bare `tilled` soil in the square is also kept moist: it is exempt from the
+  till-decay sweep (see §8), and placing or lifting the sprinkler restamps the
+  covered tiles' drying clock.
+- The client draws the sprinkler as a static green base plus a brass rotor that
+  spins briefly about once a minute with a water spray
+  (`src/world/sprinklerRendering.ts`); the tick, not the animation, waters. It is
+  drawn under the crop layer, so mature plants render in front of it.
+- The hardware stall also sells the basic tools (one-off) and restocks fences and
+  gates through the same `POST /api/hardware/buy` endpoint.
+- Shoveling a sprinkler returns it to the farm's supply and stops coverage, so
+  later plantings there are no longer watered automatically.
+- Files: `src/world/sprinkler*.ts`, `SprinklerPlacementPreview.ts`; the
+  hardware stall is a marketplace stand (`marketplaceData.ts`,
+  `MarketplaceScene.ts`, `marketData.ts`, `useFarmMarket.ts`) that opens the
+  shared market window. Server: `backend/lib/grange/farm_sprinklers.ex`,
+  `field_water.ex`, `hardware.ex`, `hardware_controller.ex`.
+
+## 8. Tilled Soil Revert
+
+Bare tilled ground dries out. A tile left in the `tilled` state for **20
+minutes** (`Farm.till_decay_ms/0`) reverts to grass on the next tick.
+
+- Only the empty `tilled` state counts down. Planting or watering moves the tile
+  to `planted`/`watered` and clears its `tilled_at` stamp, so a crop is safe
+  until it is harvested.
+- Soil under a sprinkler never decays: `FarmTick.revert_untended/1` skips any
+  tile covered by a sprinkler, and placing or lifting a sprinkler restamps the
+  covered tiles' `tilled_at`, so removal starts a fresh 20-minute window.
+- Harvesting a crop that clears the tile back to bare ground stamps a fresh
+  `tilled_at`, restarting the window.
+- The revert is silent: no client warning, countdown, or new wire field. The
+  server deletes the tile and pushes the full farm, and the client repaints
+  grass because `FarmTileSync.sync/1` removes tiles that are no longer present.
+- Server only: `FarmTick.run/1` owns the sweep. There is no client-side farm
+  simulation to keep in sync; the client repaints whatever `farmUpdate` sends.
+
+## 9. Growth Clock and the E2E Override
+
+A watered tile ripens after `Farm.grow_ms/0` — **10 seconds** by default, then
+scaled by the crop's grid synergy. `Farm.water/2` stamps `ready_at` with it, and
+`FarmTick` flips the tile to `ready` once that deadline passes.
+
+The value comes from `Application.get_env(:grange, :grow_ms, 10_000)`, so
+`backend/config/dev.exs` can shorten it:
+
+- `GRANGE_GROW_MS` is read once at boot; unset means the normal 10 seconds.
+- `playwright.config.ts` sets it to `500` in the e2e `webServer` env, so a spec
+  waits half a second instead of ten for a harvest.
+- Production config never sets it, and neither does `MIX_ENV=test`, so ExUnit
+  still drives the clock with explicit `FarmStore.tick/1` calls.
+
+Nothing else changes: the client never simulates growth, so the shortened clock
+is invisible outside the server's tile states.

@@ -23,7 +23,8 @@ describe("placeable fences", () => {
 		expect(buildFenceGraph([])).toEqual({ nodes: [], edges: [] });
 		expect(fenceInBounds(0, 0)).toBe(true);
 		expect(fenceInBounds(17, 9)).toBe(true);
-		expect(fenceInBounds(18, 9)).toBe(false);
+		expect(fenceInBounds(18, 9)).toBe(true);
+		expect(fenceInBounds(20, 9)).toBe(false);
 		expect(fenceInBounds(1, 10)).toBe(false);
 	});
 

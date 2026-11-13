@@ -1,10 +1,17 @@
 import { create } from "zustand";
 import { usePauseStore } from "../pause/pauseStore";
 import { STARTER_ROD } from "../world/fishingData";
+import { buildAdminInventory } from "./adminInventory";
+import {
+	GRID_SIZE,
+	HOTBAR_SIZE,
+	layoutFromSnapshot,
+} from "./inventorySnapshot";
+import { reconcileItemCount } from "./itemCounts";
 import { ITEMS, type ItemId } from "./items";
+import { applySeedCounts } from "./seedCounts";
 
-export const GRID_SIZE = 24;
-export const HOTBAR_SIZE = 10;
+export { GRID_SIZE, HOTBAR_SIZE };
 
 export type SlotArea = "grid" | "hotbar";
 
@@ -43,28 +50,25 @@ function buildInitialHotbar(): InventorySlot[] {
 	return hotbar;
 }
 
-/**
- * Every item in the game, one stack at its max size. Used for admin accounts,
- * which are handed the full inventory on sign-in.
- */
-function buildAdminHotbar(): InventorySlot[] {
-	const order = Object.keys(ITEMS) as ItemId[];
-	const hotbar = Array.from({ length: HOTBAR_SIZE }, emptySlot);
-	order.forEach((itemId, index) => {
-		hotbar[index] = stack(itemId, ITEMS[itemId].maxStack);
-	});
-	return hotbar;
-}
-
 interface InventoryState {
 	grid: InventorySlot[];
 	hotbar: InventorySlot[];
 	selectedHotbar: number;
 	inventoryOpen: boolean;
+	barnOpen: boolean;
+	/** True once the account's full inventory snapshot has been applied (or failed). */
+	inventoryHydrated: boolean;
+	/** True only when the last snapshot came from the server. */
+	inventorySynced: boolean;
 	selectHotbar: (index: number) => void;
 	setInventoryOpen: (open: boolean) => void;
 	toggleInventory: () => void;
+	setBarnOpen: (open: boolean) => void;
 	moveStack: (from: SlotRef, to: SlotRef) => void;
+	/** Sends a stack to the other area (hotbar <-> grid), topping up existing
+	 *  partial stacks of the same item first, then the first empty slot.
+	 *  Used by shift-click. */
+	quickMove: (from: SlotRef) => void;
 	splitHalf: (from: SlotRef, to: SlotRef) => void;
 	addItem: (itemId: ItemId, count: number) => number;
 	/** Removes up to `count` of an item across slots. Returns how many were removed. */
@@ -72,6 +76,9 @@ interface InventoryState {
 	removeAt: (ref: SlotRef, count: number) => void;
 	grantAllItems: () => void;
 	setItemCount: (itemId: ItemId, count: number) => void;
+	hydrateInventory: (slots: unknown, seeds: Record<string, number>) => void;
+	hydrateSeeds: (seeds: Record<string, number>) => void;
+	markInventoryHydrated: () => void;
 	resetInventory: () => void;
 }
 
@@ -84,6 +91,9 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 	hotbar: buildInitialHotbar(),
 	selectedHotbar: 0,
 	inventoryOpen: false,
+	barnOpen: false,
+	inventoryHydrated: false,
+	inventorySynced: false,
 
 	selectHotbar: (index) => {
 		if (index < 0 || index >= HOTBAR_SIZE) return;
@@ -92,6 +102,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
 	setInventoryOpen: (open) => set({ inventoryOpen: open }),
 	toggleInventory: () => set((s) => ({ inventoryOpen: !s.inventoryOpen })),
+	setBarnOpen: (open) => set({ barnOpen: open }),
 
 	moveStack: (from, to) => {
 		if (from.area === to.area && from.index === to.index) return;
@@ -131,6 +142,28 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 		}
 
 		set({ grid: nextGrid, hotbar: nextHotbar });
+	},
+
+	quickMove: (from) => {
+		const source = slotsOf(get(), from.area)[from.index];
+		if (!source?.itemId || source.count <= 0) return;
+		const itemId = source.itemId;
+		const destArea: SlotArea = from.area === "grid" ? "hotbar" : "grid";
+		const max = ITEMS[itemId].maxStack;
+		// Top up existing partial stacks of the same item first, so a quick move
+		// can't leave a fragmented pile behind.
+		if (max > 1) {
+			for (let i = 0; i < slotsOf(get(), destArea).length; i += 1) {
+				const slot = slotsOf(get(), destArea)[i];
+				if (slot.itemId !== itemId || slot.count >= max) continue;
+				get().moveStack(from, { area: destArea, index: i });
+				if (!slotsOf(get(), from.area)[from.index]?.itemId) return;
+			}
+		}
+		const still = slotsOf(get(), from.area)[from.index];
+		if (!still?.itemId) return;
+		const empty = slotsOf(get(), destArea).findIndex((slot) => !slot.itemId);
+		if (empty >= 0) get().moveStack(from, { area: destArea, index: empty });
 	},
 
 	splitHalf: (from, to) => {
@@ -225,41 +258,45 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 		set({ grid: nextGrid, hotbar: nextHotbar });
 	},
 
-	grantAllItems: () =>
+	grantAllItems: () => {
+		const { grid, hotbar } = buildAdminInventory();
 		set({
-			grid: Array.from({ length: GRID_SIZE }, emptySlot),
-			hotbar: buildAdminHotbar(),
+			grid,
+			hotbar,
 			selectedHotbar: 0,
 			inventoryOpen: false,
-		}),
+		});
+	},
 
 	setItemCount: (itemId, count) => {
 		const state = get();
 		const keepsEmptySlot = itemId === "fence" || itemId === "gate";
-		if (count <= 0 && !keepsEmptySlot &&
-			!state.hotbar.some((slot) => slot.itemId === itemId) &&
-			!state.grid.some((slot) => slot.itemId === itemId)) return;
-		const nextGrid = state.grid.map((slot) => slot.itemId === itemId ? emptySlot() : slot);
-		const nextHotbar = state.hotbar.map((slot) => slot.itemId === itemId ? emptySlot() : slot);
-		if (count <= 0 && !keepsEmptySlot) {
-			set({ grid: nextGrid, hotbar: nextHotbar });
-			return;
-		}
-		const hotbarIndex = state.hotbar.findIndex((slot) => slot.itemId === itemId);
-		const gridIndex = state.grid.findIndex((slot) => slot.itemId === itemId);
-		const next = stack(itemId, Math.max(0, Math.min(count, ITEMS[itemId].maxStack)));
-		if (hotbarIndex >= 0) nextHotbar[hotbarIndex] = next;
-		else if (gridIndex >= 0) nextGrid[gridIndex] = next;
-		else {
-			const freeHotbar = nextHotbar.findIndex((slot) => !slot.itemId);
-			if (freeHotbar >= 0) nextHotbar[freeHotbar] = next;
-			else {
-				const freeGrid = nextGrid.findIndex((slot) => !slot.itemId);
-				if (freeGrid >= 0) nextGrid[freeGrid] = next;
-			}
-		}
-		set({ grid: nextGrid, hotbar: nextHotbar });
+		const next = reconcileItemCount(
+			state.grid,
+			state.hotbar,
+			itemId,
+			count,
+			keepsEmptySlot,
+		);
+		set({ grid: next.grid, hotbar: next.hotbar });
 	},
+
+	hydrateInventory: (slots, seeds) => {
+		const snapshot = layoutFromSnapshot(slots);
+		const base =
+			snapshot.occupied > 0
+				? snapshot
+				: { grid: buildInitialGrid(), hotbar: buildInitialHotbar() };
+		const { grid, hotbar } = applySeedCounts(base.grid, base.hotbar, seeds);
+		set({ grid, hotbar, inventoryHydrated: true, inventorySynced: true });
+	},
+
+	hydrateSeeds: (seeds) => {
+		const { grid, hotbar } = applySeedCounts(get().grid, get().hotbar, seeds);
+		set({ grid, hotbar, inventoryHydrated: true });
+	},
+
+	markInventoryHydrated: () => set({ inventoryHydrated: true }),
 
 	resetInventory: () =>
 		set({
@@ -267,27 +304,22 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 			hotbar: buildInitialHotbar(),
 			selectedHotbar: 0,
 			inventoryOpen: false,
+			barnOpen: false,
+			inventoryHydrated: false,
+			inventorySynced: false,
 		}),
 }));
 
 /**
  * Excalibur scene polls this to freeze movement while an overlay captures
- * input (inventory modal or pause menu).
+ * input (inventory modal, barn storage, or pause menu).
  */
 export function isInventoryBlockingInput(): boolean {
 	return (
 		useInventoryStore.getState().inventoryOpen ||
+		useInventoryStore.getState().barnOpen ||
 		usePauseStore.getState().paused
 	);
 }
 
-export function countItem(
-	state: Pick<InventoryState, "grid" | "hotbar">,
-	itemId: ItemId,
-): number {
-	let total = 0;
-	for (const slot of [...state.grid, ...state.hotbar]) {
-		if (slot.itemId === itemId) total += slot.count;
-	}
-	return total;
-}
+export { countItem, freeSpaceFor } from "./inventoryQueries";

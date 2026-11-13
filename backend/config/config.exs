@@ -18,6 +18,11 @@ config :grange, enable_test_routes: false
 
 config :phoenix, :json_library, Jason
 
+# Transactional email goes through this adapter seam. The console adapter is
+# the safe default; production overrides it with Mailtrap in runtime.exs.
+config :grange, :mailer, Grange.Mailer.Console
+config :grange, :app_url, "http://localhost:3200"
+
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]

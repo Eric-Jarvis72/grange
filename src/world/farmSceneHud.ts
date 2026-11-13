@@ -1,10 +1,7 @@
 import type * as ex from "excalibur";
 import { useGameStore } from "../store";
-import {
-	type FarmHoveredTile,
-	type FarmHudSnapshot,
-	hoveredFarmTile,
-} from "./farmHud";
+import type { FarmHoveredTile, FarmHudSnapshot } from "./farmHud";
+import { hoveredFarmTile } from "./farmHud";
 
 /**
  * Owns the farm HUD's transient state - the held message, the hovered tile, and
@@ -18,6 +15,7 @@ export class FarmSceneHud {
 
 	constructor(
 		initialMessage: string,
+		private readonly player: () => { x: number; y: number },
 		private readonly publish: (snapshot: FarmHudSnapshot) => void,
 	) {
 		this.message = initialMessage;
@@ -49,6 +47,7 @@ export class FarmSceneHud {
 			tomatoes: farm?.tomatoes ?? 0,
 			message: this.message,
 			hovered: this.hovered,
+			player: this.player(),
 		});
 	}
 }
