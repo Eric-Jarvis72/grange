@@ -6,9 +6,12 @@ defmodule Grange.FarmActionTest do
 
   test "opts/1 normalises crop, tool, and combo fields" do
     opts = %{"crop" => "wheat", "tool" => "scythe", "comboMutationMultiplier" => 1.5}
-    assert FarmAction.opts(opts) == %{crop: "wheat", tool: :scythe, combo: 1.5}
-    assert FarmAction.opts(%{}) == %{crop: nil, tool: nil, combo: nil}
+    assert FarmAction.opts(opts) == %{crop: "wheat", animal: nil, tool: :scythe, combo: 1.5}
+    assert FarmAction.opts(%{}) == %{crop: nil, animal: nil, tool: nil, combo: nil}
     assert FarmAction.opts(%{"crop" => "bogus", "tool" => "fork"})[:crop] == nil
+    assert FarmAction.opts(%{"animal" => "hen"})[:animal] == "hen"
+    assert FarmAction.opts(%{"animal" => "pig"})[:animal] == "pig"
+    assert FarmAction.opts(%{"animal" => "dragon"})[:animal] == nil
   end
 
   test "combo_count maps the multiplier into a tier count" do

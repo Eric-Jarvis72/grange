@@ -1,6 +1,6 @@
 [tools]
 nodejs = "24"
-pnpm = "11"
+pnpm = "latest"
 erlang = "latest"
 elixir = "latest"
 

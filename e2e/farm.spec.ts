@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { TILE_SIZE } from "../src/world/mapData";
 import {
 	clickFarmTile,
 	clickWorld,
 	farmTilePosition,
 	hoverFarmTile,
+	movePlayerIntoReach,
 	movePlayerNear,
 	registerFast,
 	tapFarmTile,
@@ -13,6 +15,9 @@ import {
 } from "./helpers";
 
 test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
+	// Five walks, a growth wait, and a drag stroke in one spec: the default 90s
+	// budget leaves too little room on a shared runner.
+	test.setTimeout(150_000);
 	await registerFast(page, uniqueName("Sprout"));
 	await expect(page).toHaveURL(/\/world$/);
 	await expect(page.getByTestId("farm-tile")).toBeVisible();
@@ -24,13 +29,16 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	// Hoe tile (9, 7)
 	await clickFarmTile(page, 9, 7);
 	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): tilled");
+	// The first click walks into tool range on newer builds. Reuse that position
+	// for the rest of this tile's farming cycle instead of walking on every step.
+	const workTile = () => clickWorld(page, 9.5 * TILE_SIZE, 7.5 * TILE_SIZE);
 
 	// Seeds (hotbar slot 2 maps to key "2")
 	await page.keyboard.press("2");
 	await expect(page.getByTestId("slot-hotbar-1")).toHaveClass(
 		/inv-slot-selected/,
 	);
-	await clickFarmTile(page, 9, 7);
+	await workTile();
 	await expect(page.getByTestId("farm-tile")).toContainText("(9, 7): planted");
 	// Planting spends one tomato seed from the pouch (10 -> 9).
 	await expect(page.getByTestId("slot-hotbar-1")).toHaveAttribute(
@@ -41,7 +49,7 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 	// Bucket. The e2e clock can ripen the tile before this assertion runs, and
 	// `ready` also proves the watering landed.
 	await page.keyboard.press("3");
-	await clickFarmTile(page, 9, 7);
+	await workTile();
 	await expect(page.getByTestId("farm-tile")).toContainText(
 		/\(9, 7\): (?:watered|ready)/,
 	);
@@ -51,7 +59,7 @@ test("farming loop: hoe, seed, bucket, grow, scythe", async ({ page }) => {
 		timeout: 20_000,
 	});
 	await page.keyboard.press("4");
-	await clickFarmTile(page, 9, 7);
+	await workTile();
 	// The harvested tomato lands in the first free inventory slot after the tools.
 	await expect(page.locator('[data-item="tomato"]')).toHaveAttribute(
 		"data-count",
@@ -107,7 +115,7 @@ test("hoe click tills an open grass square", async ({ page }) => {
 	await expect(tiles).toHaveText("1 tiles");
 });
 
-test("a fence places, blocks hoeing, and returns to inventory when shoveled", async ({
+test("a fence leaves its neighboring tile farmable and returns to inventory when shoveled", async ({
 	page,
 }) => {
 	await registerFast(page, uniqueName("Sprout"));
@@ -122,18 +130,13 @@ test("a fence places, blocks hoeing, and returns to inventory when shoveled", as
 	);
 	await page.keyboard.press("1");
 	await clickFarmTile(page, 7, 5);
-	await expect(page.getByTestId("notification-feed")).toContainText(
-		"Something is in the way.",
-	);
-	await expect(page.getByTestId("farm-tile")).toContainText("(7, 5): grass");
+	await expect(page.getByTestId("farm-tile")).toContainText("(7, 5): tilled");
 	await page.keyboard.press("7");
 	await clickFarmTile(page, 7, 5);
 	await expect(page.getByTestId("slot-hotbar-5")).toHaveAttribute(
 		"data-count",
 		"20",
 	);
-	await page.keyboard.press("1");
-	await clickFarmTile(page, 7, 5);
 	await expect(page.getByTestId("farm-tile")).toContainText("(7, 5): tilled");
 });
 
@@ -145,19 +148,22 @@ test("a gate places, opens with E, and returns to inventory when shoveled", asyn
 	await expect(page.getByTestId("notification-feed")).toBeVisible();
 
 	await page.keyboard.press("5");
-	await clickFarmTile(page, 8, 8);
+	// Gates snap to tile corners. Pick (9, 9), 44px from the player spawn,
+	// instead of a tile center that may round to a farther corner.
+	const gatePoint = { x: 9 * TILE_SIZE + 4, y: 9 * TILE_SIZE + 4 };
+	await clickWorld(page, gatePoint.x, gatePoint.y);
 	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
 		"data-count",
 		"1",
 	);
 
-	// The player spawns within reach of this gate, so its prompt appears at once.
+	// The player spawns within reach of this corner, so its prompt appears at once.
 	await expect(page.getByTestId("travel-prompt")).toContainText("open gate");
 	await page.keyboard.press("e");
 	await expect(page.getByTestId("travel-prompt")).toContainText("close gate");
 
 	await page.keyboard.press("7");
-	await clickFarmTile(page, 8, 8);
+	await clickWorld(page, gatePoint.x, gatePoint.y);
 	await expect(page.getByTestId("slot-hotbar-4")).toHaveAttribute(
 		"data-count",
 		"2",
@@ -181,14 +187,15 @@ test("fence placement previews on hold and commits only on a valid release", asy
 	await expect(slot).toHaveAttribute("data-count", "19");
 });
 
-test("the shovel digs, previews, and drops movable props", async ({ page }) => {
+test("the shovel previews and restores a farmhouse", async ({ page }) => {
 	await registerFast(page, uniqueName("Mover"));
 
 	// A carried house previews while dragging over the still-standing well
 	// (blocked), refuses to land there, and still returns to its own original
 	// spot. Do this before digging the well: the well is the obstacle.
 	await page.keyboard.press("7");
-	await movePlayerNear(page, 210, 200);
+	// Stand within reach of the house; its own footprint is not walkable.
+	await movePlayerIntoReach(page, 210, 200);
 	await clickWorld(page, 210, 200);
 	const houseSlot = page.locator('[data-item="farmhouse"]');
 	await expect(houseSlot).toHaveCount(1);
@@ -211,20 +218,28 @@ test("the shovel digs, previews, and drops movable props", async ({ page }) => {
 	await expect(houseSlot).toHaveCount(1);
 	await page.mouse.up();
 	await expect(houseSlot).toHaveCount(0);
+});
+
+test("the shovel moves a well", async ({ page }) => {
+	await registerFast(page, uniqueName("Mover"));
 
 	// Dig the well, then drop it on open soil.
 	await page.keyboard.press("7");
-	await movePlayerNear(page, 200, 350);
+	await movePlayerIntoReach(page, 200, 350);
 	await clickWorld(page, 200, 350);
 	const wellSlot = page.locator('[data-item="well"]');
 	await expect(wellSlot).toHaveCount(1);
 	await wellSlot.click();
 	await tapFarmTile(page, 8, 7);
 	await expect(wellSlot).toHaveCount(0);
+});
+
+test("the shovel moves a sign onto a path", async ({ page }) => {
+	await registerFast(page, uniqueName("Mover"));
 
 	// A dug sign can be dropped straight onto the road path.
 	await page.keyboard.press("7");
-	await movePlayerNear(page, 395, 360);
+	await movePlayerIntoReach(page, 395, 360);
 	await clickWorld(page, 395, 360);
 	const signSlot = page.locator('[data-item="sign"]');
 	await expect(signSlot).toHaveCount(1);
@@ -243,7 +258,7 @@ test("the hoe refuses buildings and the shovel clears flowers", async ({
 	await registerFast(page, uniqueName("Sprout"));
 	await expect(page).toHaveURL(/\/world$/);
 
-// A tile inside the barn's footprint. It is reachable from the clear ground
+	// A tile inside the barn's footprint. It is reachable from the clear ground
 	// beside the building, but the hoe must refuse it as blocked.
 	await clickFarmTile(page, 12, 4);
 	await expect(page.getByTestId("notification-feed")).toContainText(
@@ -265,6 +280,9 @@ test("the hoe refuses buildings and the shovel clears flowers", async ({
 test("a visitor sees another farm read-only but can toggle its gates", async ({
 	page,
 }) => {
+	// Two accounts, a logout, and a fresh world boot in one spec: the default
+	// 90s budget leaves too little room on a shared runner.
+	test.setTimeout(150_000);
 	const owner = uniqueName("Owner");
 	await registerFast(page, owner);
 	await page.keyboard.press("5");

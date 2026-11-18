@@ -56,7 +56,7 @@ defmodule GrangeWeb.HubChannel do
     with %{area: area} <- hub,
          %{username: username} <- user,
          true <- throttle_open?(hub.last_move_at, now),
-         {:ok, {px, py}} <- Hub.clamp_position(x, y) do
+         {:ok, {px, py}} <- Hub.clamp_position(area, x, y) do
       track(username, area, px, py)
       {:reply, :ok, assign(socket, :hub, %{hub | last_move_at: now})}
     else

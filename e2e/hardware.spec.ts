@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { MAP_COLUMNS, MAP_ROWS } from "../src/world/mapData";
+import { TILE_SIZE } from "../src/world/mapData";
 import {
 	BASE,
 	hoverFarmTile,
@@ -8,6 +8,7 @@ import {
 	useDoor,
 	waitForWorld,
 	walkToHardwareStore,
+	worldPoint,
 } from "./helpers";
 
 test("the hardware stall opens a market window and sells sprinklers", async ({
@@ -78,12 +79,8 @@ test("a sprinkler placed on tilled soil waters its 2x2", async ({ page }) => {
 
 	// Select the sprinkler and drop it on the corner that covers the tilled tile.
 	await page.keyboard.press("9");
-	const box = await page.locator("canvas.farm-map-canvas").boundingBox();
-	if (!box) throw new Error("the world canvas is not laid out");
-	await page.mouse.move(
-		box.x + (9 / MAP_COLUMNS) * box.width,
-		box.y + (9 / MAP_ROWS) * box.height,
-	);
+	const corner = await worldPoint(page, 9 * TILE_SIZE, 9 * TILE_SIZE);
+	await page.mouse.move(corner.x, corner.y);
 	await page.mouse.down();
 	await page.mouse.up();
 	await expect(page.locator(".farm-map-page")).toHaveAttribute(

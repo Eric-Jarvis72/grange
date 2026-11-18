@@ -28,8 +28,24 @@ export const MARKETPLACE_PRODUCE_MARKET_ENTRANCE = { x: 575, y: 350 } as const;
 export const MARKETPLACE_LIVESTOCK_ENTRANCE = { x: 650, y: 575 } as const;
 export const MARKETPLACE_BANK_ENTRANCE = { x: 1310, y: 570 } as const;
 export const MARKETPLACE_HARDWARE_ENTRANCE = { x: 1230, y: 355 } as const;
-export const MARKETPLACE_COLUMNS = 24;
-export const MARKETPLACE_WIDTH = MARKETPLACE_COLUMNS * 64;
+/**
+ * Wide enough to leave open plots beyond the current stalls for future
+ * buildings. The world extends left and above the original 24x12 map too, so
+ * the camera can scroll into new construction space on every exposed side.
+ */
+export const MARKETPLACE_MIN_COLUMN = -8;
+export const MARKETPLACE_MAX_COLUMN = 31;
+export const MARKETPLACE_COLUMNS =
+	MARKETPLACE_MAX_COLUMN - MARKETPLACE_MIN_COLUMN + 1;
+export const MARKETPLACE_MIN_ROW = -8;
+export const MARKETPLACE_MAX_ROW = 11;
+export const MARKETPLACE_ROWS =
+	MARKETPLACE_MAX_ROW - MARKETPLACE_MIN_ROW + 1;
+/** Right edge and top edge of the walkable marketplace, in world pixels. */
+export const MARKETPLACE_WIDTH = (MARKETPLACE_MAX_COLUMN + 1) * 64;
+export const MARKETPLACE_HEIGHT = (MARKETPLACE_MAX_ROW + 1) * 64;
+export const MARKETPLACE_MIN_X = MARKETPLACE_MIN_COLUMN * 64;
+export const MARKETPLACE_MIN_Y = MARKETPLACE_MIN_ROW * 64;
 
 export function marketplaceTerrainAt(column: number, row: number): TerrainKey {
 	if (

@@ -75,5 +75,14 @@ fi
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
 systemctl --user restart grange
-curl --retry 15 --retry-delay 2 --retry-connrefused -fsS "http://127.0.0.1:${PORT}/api/state"
+
+# The health check is the only thing CI hears back from this host, so when it
+# fails dump the unit's log. Otherwise a boot crash (a bad glibc, a failed
+# migration, a missing release file) shows up as nothing but curl errors.
+if ! curl --retry 15 --retry-delay 2 --retry-connrefused -fsS "http://127.0.0.1:${PORT}/api/state"; then
+  echo
+  systemctl --user status grange --no-pager -l || true
+  journalctl --user -u grange --no-pager -n 100 || true
+  exit 1
+fi
 echo

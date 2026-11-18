@@ -13,6 +13,37 @@ export const REMOTE_SNAP_DISTANCE = 250;
 /** True once an avatar has moved enough to count as walking. */
 const MOVE_EPSILON = 0.2;
 
+/** How long a bonked avatar wobbles before settling back to its walk cycle. */
+export const BONK_DURATION_MS = 420;
+
+/** Peak sideways knockback in world pixels. */
+export const BONK_KNOCKBACK = 16;
+
+/** Offset and tilt applied to a remote avatar after a shovel hit. */
+export interface BonkPose {
+	offsetX: number;
+	rotation: number;
+}
+
+/**
+ * Decaying knockback and a comic wobble for a shovel bonk.
+ *
+ * The pose starts at rest, kicks away from the attacker, then rings down to
+ * zero once `BONK_DURATION_MS` has elapsed. Pure so the reaction is testable.
+ */
+export function bonkPose(elapsedMs: number, direction: number): BonkPose {
+	const t = Math.min(1, Math.max(0, elapsedMs / BONK_DURATION_MS));
+	if (t >= 1) return { offsetX: 0, rotation: 0 };
+	const sign = direction < 0 ? -1 : 1;
+	const kick = Math.sin(Math.min(1, t / 0.18) * (Math.PI / 2));
+	const settle = 1 - t;
+	const wobble = Math.sin(t * Math.PI * 3) * settle * settle;
+	return {
+		offsetX: sign * BONK_KNOCKBACK * kick * settle,
+		rotation: sign * 0.24 * wobble,
+	};
+}
+
 /**
  * Eases `current` toward `target`. Frame-rate independent: `deltaMs` may be
  * clamped or variable without changing the feel.

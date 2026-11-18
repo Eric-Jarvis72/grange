@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
 	ANIMATED_PROPS,
-	farmBounds,
 	FARM_TRAIN_ENGINE_STOP,
 	FARM_TRAIN_STOP,
+	FARM_WORLD_MAX_COLUMN,
+	FARM_WORLD_MAX_ROW,
+	FARM_WORLD_MIN_COLUMN,
+	FARM_WORLD_MIN_ROW,
+	farmBounds,
 	isNearFarmTrain,
-		isTillableTile,
-		ownsFarmTile,
+	isTillableTile,
+	LAND_PRICES,
+	ownsFarmTile,
 	MAP_COLUMNS,
 	MAP_HEIGHT,
 	MAP_ROWS,
@@ -29,6 +34,8 @@ describe("farm map data", () => {
 			expect(terrainAt(column, 10)).toBe("shore-north");
 			expect(terrainAt(column, 11)).toBe("water");
 		}
+		// Scenic rows revealed on unusually tall browser windows stay water.
+		expect(terrainAt(5, 12)).toBe("water");
 	});
 
 	it("starts the crop field as plantable grass", () => {
@@ -71,6 +78,21 @@ describe("farm map data", () => {
 		expect(ownsFarmTile(7, -3, 4)).toBe(true);
 		expect(farmBounds(0)).toEqual({ minColumn: 0, maxColumn: 17, minRow: 0, maxRow: 11 });
 		expect(ownsFarmTile(0, 11, 4)).toBe(false);
+	});
+
+	it("unlocks the full walkable world on the final land purchase", () => {
+		expect(farmBounds(5)).toEqual({
+			minColumn: FARM_WORLD_MIN_COLUMN,
+			maxColumn: FARM_WORLD_MAX_COLUMN,
+			minRow: FARM_WORLD_MIN_ROW,
+			maxRow: FARM_WORLD_MAX_ROW,
+		});
+		expect(ownsFarmTile(FARM_WORLD_MIN_COLUMN, FARM_WORLD_MIN_ROW, 5)).toBe(true);
+		expect(ownsFarmTile(FARM_WORLD_MAX_COLUMN, 9, 5)).toBe(true);
+		expect(ownsFarmTile(FARM_WORLD_MIN_COLUMN - 1, 0, 5)).toBe(false);
+		expect(ownsFarmTile(FARM_WORLD_MAX_COLUMN + 1, 0, 5)).toBe(false);
+		expect(ownsFarmTile(0, 10, 5)).toBe(false);
+		expect(LAND_PRICES).toHaveLength(5);
 	});
 
 	it("keeps props within the map", () => {

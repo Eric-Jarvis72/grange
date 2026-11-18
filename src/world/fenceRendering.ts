@@ -4,7 +4,6 @@ import type { BlockRegistry } from "./blocking";
 import {
 	edgeKey,
 	type FenceCoord,
-	fenceBlockedTiles,
 	fenceGraph,
 	gatedEdgeFor,
 	gateSpriteOrientation,
@@ -93,12 +92,12 @@ export class FenceLayer {
 				this.actors.push(rail(this.scene, fenceImages["rail-horizontal"],
 					edge.from.worldX - RAIL_OVERLAP, edge.from.worldY - 37,
 					edge.to.worldX - edge.from.worldX + RAIL_OVERLAP * 2, 33,
-					80 + edge.from.worldY));
+					120 + edge.from.worldY));
 			} else {
 				this.actors.push(rail(this.scene, fenceImages["rail-vertical"],
 					edge.from.worldX - 14, edge.from.worldY - RAIL_OVERLAP, 28,
 					edge.to.worldY - edge.from.worldY + RAIL_OVERLAP - 3,
-					80 + edge.from.worldY));
+					155 + edge.from.worldY));
 			}
 		}
 		const gateByKey = new Map(gates.map((gate) => [`${gate.x},${gate.y}`, gate]));
@@ -143,7 +142,8 @@ export class FenceLayer {
 			this.scene.add(actor);
 			this.actors.push(actor);
 		}
-		this.blocks.add("field-fence", fenceBlockedTiles(coords, gates));
+		// Rails/posts block walking in world space, not farming entire ground tiles.
+		this.blocks.remove("field-fence");
 		setFarmFenceObstacles(coords, gates);
 	}
 }

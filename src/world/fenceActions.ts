@@ -3,8 +3,8 @@ import { useInventoryStore } from "../inventory/inventoryStore";
 import { emitFarmAction } from "../socket";
 import { useGameStore } from "../store";
 import type { BlockRegistry } from "./blocking";
-import { fenceInBounds, fenceKey } from "./fenceData";
-import { isTillableTile, ownsFarmTile, TILE_SIZE } from "./mapData";
+import { fenceKey, ownsFenceCorner } from "./fenceData";
+import { TILE_SIZE } from "./mapData";
 
 export function selectedFarmItem() {
 	const inventory = useInventoryStore.getState();
@@ -12,17 +12,15 @@ export function selectedFarmItem() {
 }
 
 export function fencePlacementReason(farm: ActiveFarm,
-	column: number, row: number, blocks: BlockRegistry,
+	column: number, row: number, _blocks: BlockRegistry,
 	player: { x: number; y: number }): string | null {
-	if (!fenceInBounds(column, row)) return "Keep fences on dry land.";
-	if (!ownsFarmTile(column, row, farm.land_level ?? 0)) return "Buy this land from the mayor first.";
+	if (!ownsFenceCorner(column, row, farm.land_level ?? 0))
+		return "Buy this land from the mayor first.";
 	if (farm.fence_count <= 0) return "No fences left in inventory.";
-	if (blocks.isBlocked(column, row) ||
-		(farm.fences ?? []).some(({ x, y }) => fenceKey(x, y) === fenceKey(column, row)) ||
+	if ((farm.fences ?? []).some(({ x, y }) => fenceKey(x, y) === fenceKey(column, row)) ||
 		(farm.gates ?? []).some(({ x, y }) => fenceKey(x, y) === fenceKey(column, row)) ||
-		farm.tiles.some((tile) => tile.x === column && tile.y === row) ||
-		(column === Math.floor(player.x / TILE_SIZE) && row === Math.floor(player.y / TILE_SIZE)))
-		return "That tile is occupied.";
+		Math.hypot(player.x - column * TILE_SIZE, player.y - row * TILE_SIZE) < 16)
+		return "That fence corner is occupied.";
 	return null;
 }
 
@@ -41,12 +39,10 @@ export function actOnFence(owner: string, column: number, row: number,
 		if (reason) { report(reason); return; }
 	}
 	if (item === "gate") {
-		if (!fenceInBounds(column, row) || !isTillableTile(column, row) ||
-			!ownsFarmTile(column, row, farm.land_level ?? 0) ||
-			blocks.isBlocked(column, row) || fenceHere || gateHere || farm.gate_count <= 0 ||
-			(column === Math.floor(player.x / TILE_SIZE) && row === Math.floor(player.y / TILE_SIZE)) ||
-			farm.tiles.some((tile) => tile.x === column && tile.y === row)) {
-			report("Place gates on clear grass.");
+		if (!ownsFenceCorner(column, row, farm.land_level ?? 0) ||
+			fenceHere || gateHere || farm.gate_count <= 0 ||
+			Math.hypot(player.x - column * TILE_SIZE, player.y - row * TILE_SIZE) < 16) {
+			report("Place gates on a clear tile corner.");
 			return;
 		}
 	}

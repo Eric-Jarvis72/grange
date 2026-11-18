@@ -75,6 +75,18 @@ defmodule GrangeWeb.HubChannelTest do
     assert %{x: 1136, y: 32} = meta("casino", "Clamp-Dave")
   end
 
+  test "move clamps into the expanded marketplace bounds" do
+    {_reply, west} = join_hub("Clamp-West", "marketplace")
+    ref = push(west, "move", %{"x" => -99_999, "y" => -99_999})
+    assert_reply(ref, :ok)
+    assert %{x: -496, y: -480} = meta("marketplace", "Clamp-West")
+
+    {_reply, east} = join_hub("Clamp-East", "marketplace")
+    ref = push(east, "move", %{"x" => 99_999, "y" => 99_999})
+    assert_reply(ref, :ok)
+    assert %{x: 2032, y: 752} = meta("marketplace", "Clamp-East")
+  end
+
   test "move ignores malformed payloads" do
     {_reply, socket} = join_hub("Bad-Erin", "casino")
 

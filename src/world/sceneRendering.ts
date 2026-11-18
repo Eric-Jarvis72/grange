@@ -20,6 +20,8 @@ export function addTerrain(
 	terrainAt: (column: number, row: number) => TerrainKey,
 	columns = MAP_COLUMNS,
 	rows = MAP_ROWS,
+	startColumn = 0,
+	startRow = 0,
 ): void {
 	const sheet = ex.SpriteSheet.fromImageSource({
 		image: terrainImage,
@@ -31,7 +33,7 @@ export function addTerrain(
 		},
 	});
 	const terrain = new ex.TileMap({
-		pos: ex.vec(0, 0),
+		pos: ex.vec(startColumn * TILE_SIZE, startRow * TILE_SIZE),
 		tileWidth: TILE_SIZE,
 		tileHeight: TILE_SIZE,
 		columns,
@@ -41,7 +43,7 @@ export function addTerrain(
 
 	for (let row = 0; row < rows; row += 1) {
 		for (let column = 0; column < columns; column += 1) {
-			const frame = terrainFrames[terrainAt(column, row)];
+			const frame = terrainFrames[terrainAt(startColumn + column, startRow + row)];
 			terrain
 				.getTile(column, row)
 				?.addGraphic(sheet.getSprite(frame.column, frame.row));

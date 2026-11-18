@@ -17,7 +17,12 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # The release bundles ERTS and its NIFs, so the binaries are built against
+    # the runner's glibc and must stay loadable on the deploy hosts (Debian 13,
+    # glibc 2.41). `ubuntu-latest` moved to 26.04, whose OTP build needs
+    # GLIBC_2.43 and dies at startup with `version 'GLIBC_2.43' not found`.
+    # Pin the newest image the hosts can run instead of tracking `latest`.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
 
     steps:

@@ -202,7 +202,8 @@ defmodule Grange.AccountsTest do
   end
 
   test "grant_admin can reset the password so the login is known" do
-    {:ok, _user} = register()
+    {:ok, user} = register()
+    {:ok, _} = Accounts.verify_email(AuthToken.issue(user.id, :verify_email))
 
     assert {:ok, promoted} = Accounts.grant_admin("Alice", "brand-new-pass")
     assert promoted.is_admin

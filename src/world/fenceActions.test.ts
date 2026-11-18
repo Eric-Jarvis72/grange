@@ -33,13 +33,21 @@ describe("fence placement after gate integration", () => {
 	it("rejects a gate post even if collision data has not refreshed", () => {
 		const withGate = { ...farm, gates: [{ x: 5, y: 4, direction: "horizontal" as const, open: true }] };
 		expect(fencePlacementReason(withGate, 5, 4, new BlockRegistry(), player))
-			.toBe("That tile is occupied.");
+			.toBe("That fence corner is occupied.");
 	});
 
 	it("rejects a depleted supply or occupied player tile", () => {
 		expect(fencePlacementReason({ ...farm, fence_count: 0 }, 5, 4,
 			new BlockRegistry(), player)).toBe("No fences left in inventory.");
 		expect(fencePlacementReason(farm, 5, 4, new BlockRegistry(),
-			{ x: 5 * 64 + 32, y: 4 * 64 + 32 })).toBe("That tile is occupied.");
+			{ x: 5 * 64, y: 4 * 64 })).toBe("That fence corner is occupied.");
+	});
+
+	it("allows a corner beside tilled soil and an animal", () => {
+		const withTile: ActiveFarm = { ...farm,
+			tiles: [{ x: 5, y: 4, state: "tilled" }],
+			placed_animals: [{ id: 1, species: "hen", x: 5, y: 4 }],
+		};
+		expect(fencePlacementReason(withTile, 5, 4, new BlockRegistry(), player)).toBeNull();
 	});
 });

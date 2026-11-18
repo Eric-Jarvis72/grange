@@ -6,6 +6,10 @@ import { actOnFence } from "./fenceActions";
 import { fenceImages } from "./fenceResources";
 import { TILE_SIZE } from "./mapData";
 
+export const fenceCornerAt = (pos: { x: number; y: number }) => ({
+	column: Math.round(pos.x / TILE_SIZE), row: Math.round(pos.y / TILE_SIZE),
+});
+
 /** One-tile placement preview, using the same validity check as the actual action. */
 export class FencePlacementPreview {
 	private tile: ex.Actor | null = null;
@@ -21,16 +25,13 @@ export class FencePlacementPreview {
 		player: { x: number; y: number }): void {
 		this.clear();
 		this.tile = new ex.Actor({ anchor: ex.vec(0, 0), z: 3002 });
-		this.graphic = new ex.Canvas({ width: TILE_SIZE, height: TILE_SIZE, draw: (ctx) => {
+		this.graphic = new ex.Canvas({ width: 28, height: 28, draw: (ctx) => {
 			const valid = !this.reason;
 			ctx.fillStyle = valid ? "rgba(49, 210, 89, 0.5)" : "rgba(240, 55, 55, 0.56)";
-			ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+			ctx.fillRect(0, 0, 28, 28);
 			ctx.strokeStyle = valid ? "#b4ffae" : "#ffb2a8";
 			ctx.lineWidth = 3;
-			ctx.strokeRect(1.5, 1.5, TILE_SIZE - 3, TILE_SIZE - 3);
-			ctx.fillStyle = "#fff";
-			ctx.font = "bold 14px sans-serif";
-			ctx.fillText("1 × 1", 8, 19);
+			ctx.strokeRect(1.5, 1.5, 25, 25);
 		} });
 		this.tile.graphics.use(this.graphic);
 		const sprite = fenceImages.post.toSprite();
@@ -45,13 +46,11 @@ export class FencePlacementPreview {
 
 	update(pos: ex.Vector, farm: ActiveFarm, blocks: BlockRegistry,
 		player: { x: number; y: number }): { column: number; row: number; reason: string | null } {
-		const column = Math.floor(pos.x / TILE_SIZE);
-		const row = Math.floor(pos.y / TILE_SIZE);
+		const { column, row } = fenceCornerAt(pos);
 		this.reason = fencePlacementReason(farm, column, row, blocks, player);
 		if (this.tile && this.post) {
-			this.tile.pos = ex.vec(column * TILE_SIZE, row * TILE_SIZE);
-			this.post.pos = ex.vec(column * TILE_SIZE + TILE_SIZE / 2,
-				row * TILE_SIZE + TILE_SIZE / 2);
+			this.tile.pos = ex.vec(column * TILE_SIZE - 14, row * TILE_SIZE - 14);
+			this.post.pos = ex.vec(column * TILE_SIZE, row * TILE_SIZE);
 			this.graphic?.flagDirty();
 		}
 		return { column, row, reason: this.reason };

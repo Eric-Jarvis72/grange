@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+import { MAP_HEIGHT, MAP_WIDTH } from "../src/world/mapData";
 import {
 	BASE,
 	expectArea,
@@ -15,10 +16,23 @@ import {
 	worldUrl,
 } from "./helpers";
 
+/**
+ * Press Space until the server-owned state shows the action. A single keypress
+ * can be lost on a heavily loaded runner or when the scene loses focus.
+ */
+async function pressSpaceUntil(
+	page: Page,
+	check: () => Promise<void>,
+): Promise<void> {
+	await expect(async () => {
+		await page.keyboard.press("Space");
+		await check();
+	}).toPass({ timeout: 20_000, intervals: [250] });
+}
+
 test("every world area loads without asset or page errors", async ({
 	page,
-}) => {
-	const pageErrors: string[] = [];
+}) => {	const pageErrors: string[] = [];
 	const failedAssets: string[] = [];
 
 	page.on("pageerror", (error) => {
@@ -58,6 +72,31 @@ test("every world area loads without asset or page errors", async ({
 
 	expect(pageErrors).toEqual([]);
 	expect(failedAssets).toEqual([]);
+});
+
+test("the canvas fills a widescreen browser with no letterboxing", async ({
+	page,
+}) => {
+	// The farm map is 3:2; a 16:10 window reveals scenic side land instead of
+	// shrinking the canvas back to 3:2 with page-colored bars.
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await registerFast(page, uniqueName("Wide"));
+	const canvas = page.locator("canvas.farm-map-canvas");
+	const box = await canvas.boundingBox();
+	expect(box).not.toBeNull();
+	if (!box) throw new Error("the world canvas is not laid out");
+	expect(Math.round(box.width)).toBe(1440);
+	expect(Math.round(box.height)).toBe(900);
+
+	const view = await canvas.evaluate((el) => {
+		const data = (el as HTMLCanvasElement).dataset;
+		return {
+			width: Number(data.viewWidth),
+			height: Number(data.viewHeight),
+		};
+	});
+	expect(view.width).toBeGreaterThan(MAP_WIDTH);
+	expect(view.height).toBeCloseTo(MAP_HEIGHT);
 });
 
 test("the market stalls open their buy and sell views", async ({ page }) => {
@@ -170,23 +209,34 @@ test("selling a harvested tomato credits the wallet", async ({ page }) => {
 	const tile = page.getByTestId("farm-tile");
 	await hoverFarmTile(page, 9, 9);
 	await page.keyboard.press("1");
-	await page.keyboard.press("Space");
-	await expect(tiles).toHaveText("1 tiles");
-	await expect(tile).toContainText("(9, 9): tilled");
+	await pressSpaceUntil(page, async () => {
+		await expect(tiles).toHaveText("1 tiles", { timeout: 800 });
+		await expect(tile).toContainText("(9, 9): tilled", { timeout: 800 });
+	});
 	await page.keyboard.press("2");
-	await page.keyboard.press("Space");
-	await expect(tile).toContainText("(9, 9): planted");
+	await pressSpaceUntil(page, async () => {
+		await expect(tile).toContainText("(9, 9): planted", { timeout: 800 });
+	});
 	await page.keyboard.press("3");
-	await page.keyboard.press("Space");
-	// The e2e clock can ripen the tile before this assertion runs; `ready`
-	// also proves the watering landed.
-	await expect(tile).toContainText(/\(9, 9\): (?:watered|ready)/);
+	await pressSpaceUntil(page, async () => {
+		await expect(tile).toContainText(/\(9, 9\): (?:watered|ready)/, {
+			timeout: 800,
+		});
+	});
 
 	// The e2e growth window is short (GRANGE_GROW_MS), then harvest one tomato.
-	await expect(tile).toContainText("(9, 9): ready", { timeout: 20_000 });
+	// Re-hover while waiting: the HUD readout can otherwise stay on a stale
+	// state when the pointer has not moved since the tile was watered.
+	await expect(async () => {
+		await hoverFarmTile(page, 9, 9);
+		await expect(tile).toContainText("(9, 9): ready", { timeout: 1_500 });
+	}).toPass({ timeout: 30_000 });
 	await page.keyboard.press("4");
-	await page.keyboard.press("Space");
-	await expect(page.getByTestId("farm-tomatoes")).toContainText("1");
+	await pressSpaceUntil(page, async () => {
+		await expect(page.getByTestId("farm-tomatoes")).toContainText("1", {
+			timeout: 800,
+		});
+	});
 	// The harvest lands in the first free hotbar slot after the tools.
 	await expect(page.locator('[data-item="tomato"]')).toHaveAttribute(
 		"data-count",

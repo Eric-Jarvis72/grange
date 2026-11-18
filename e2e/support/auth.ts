@@ -36,11 +36,15 @@ export function tokenFrom(text: string, marker: string): string {
 /**
  * The world URL for an optional deep-link boot scene.
  *
- * `?area=` is only honored by the SPA when the Phoenix shell injected the
- * dev-only test-route meta tag, so normal play still starts on the farm.
+ * `?area=` and `?walk=` are only honored by the SPA when the Phoenix shell
+ * injected the dev-only test-route meta tag, so normal play still starts on the
+ * farm at normal speed.
  */
-export function worldUrl(area?: WorldSceneName): string {
-	return area ? `${BASE}/world?area=${area}` : `${BASE}/world`;
+export function worldUrl(area?: WorldSceneName, walk?: "normal"): string {
+	const query = [area ? `area=${area}` : null, walk ? `walk=${walk}` : null]
+		.filter(Boolean)
+		.join("&");
+	return query ? `${BASE}/world?${query}` : `${BASE}/world`;
 }
 
 /**
@@ -110,6 +114,11 @@ export interface RegisterFastOptions {
 	password?: string;
 	/** Boot straight into this scene instead of the farm (dev-only hook). */
 	area?: WorldSceneName;
+	/**
+	 * `"normal"` keeps production walking speed instead of the e2e 3x speed.
+	 * Use it when the test has to read a prompt with a narrow radius.
+	 */
+	walk?: "normal";
 }
 
 /**
@@ -148,7 +157,7 @@ export async function registerFast(
 		);
 	}
 
-	await page.goto(worldUrl(options.area));
+	await page.goto(worldUrl(options.area, options.walk));
 	await waitForWorld(page);
 	return username;
 }

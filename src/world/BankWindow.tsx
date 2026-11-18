@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useGameStore } from "../store";
 import { economy } from "./EconomyManager";
 import type { BankDesk } from "./BankScene";
@@ -15,6 +15,12 @@ export function BankWindow({ desk, isOwner, onClose }: Props) {
 	const [amount, setAmount] = useState("10");
 	const [message, setMessage] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	// Read the in-flight flag through a ref: the window-level key listener is
+	// a passive effect, so a key pressed right after a transaction settles can
+	// still run the previous render's closure (with `busy` true) and get
+	// swallowed. Refs are written during render, so they never lag the DOM.
+	const busyRef = useRef(busy);
+	busyRef.current = busy;
 	const price = LAND_PRICES[landLevel];
 
 	useEffect(() => {
@@ -28,14 +34,14 @@ export function BankWindow({ desk, isOwner, onClose }: Props) {
 
 	useEffect(() => {
 		function onKey(event: KeyboardEvent) {
-			if (event.code !== "Escape" || busy) return;
+			if (event.code !== "Escape" || busyRef.current) return;
 			event.preventDefault();
 			event.stopImmediatePropagation();
 			onClose();
 		}
 		window.addEventListener("keydown", onKey, true);
 		return () => window.removeEventListener("keydown", onKey, true);
-	}, [busy, onClose]);
+	}, [onClose]);
 
 	async function submit(kind: "deposit" | "withdraw" | "land") {
 		if (busy || !isOwner) return;
@@ -92,7 +98,7 @@ export function BankWindow({ desk, isOwner, onClose }: Props) {
 		</> : <>
 			<p>{price === undefined ? "You own all available parcels." :
 				`Next parcel: $${price} · ${landLevel + 1} of ${LAND_PRICES.length}`}</p>
-			<p>Each purchase expands the farm by two tiles along its north or side edge.</p>
+			<p>Each purchase expands the farm outward. The last parcel reaches the full map border.</p>
 			<button type="button" disabled={busy || !isOwner || price === undefined || wallet < price}
 				onClick={() => void submit("land")}>Buy land</button>
 		</>}

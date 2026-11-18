@@ -22,5 +22,5 @@ defmodule Grange.Hub do
 
   Returns `:error` when either coordinate is not a number.
   """
-  def clamp_position(x, y), do: WorldPosition.clamp(x, y)
+  def clamp_position(area, x, y), do: WorldPosition.clamp_hub(area, x, y)
 end

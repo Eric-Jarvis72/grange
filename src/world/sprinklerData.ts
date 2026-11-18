@@ -1,4 +1,9 @@
-import { TILE_SIZE } from "./mapData";
+import {
+	FARM_WORLD_MAX_COLUMN,
+	FARM_WORLD_MIN_COLUMN,
+	FARM_WORLD_MIN_ROW,
+	TILE_SIZE,
+} from "./mapData";
 
 export interface SprinklerCoord {
 	x: number;
@@ -50,9 +55,9 @@ export function sprinklerInBounds(x: number, y: number): boolean {
 	return (
 		Number.isInteger(x) &&
 		Number.isInteger(y) &&
-		x >= -2 &&
-		x + 1 <= 19 &&
-		y >= -4 &&
+		x >= FARM_WORLD_MIN_COLUMN &&
+		x + 1 <= FARM_WORLD_MAX_COLUMN &&
+		y >= FARM_WORLD_MIN_ROW &&
 		y + 1 <= 9
 	);
 }

@@ -2,6 +2,9 @@ import { expect } from "@playwright/test";
 import {
 	BASE,
 	clickFarmTile,
+	clickWorld,
+	movePlayerNear,
+	playerPosition,
 	registerFast,
 	rideTrain,
 	TRAVEL_TIMEOUT,
@@ -15,10 +18,10 @@ import {
 test("farmhouse settings control visitors and farm presence", async ({
 	twoPlayers,
 }) => {
-	// Two browser contexts sharing four vCPUs with the other workers: the
-	// default 90s budget is tight when the runner is busy, and a timeout here
-	// aborts an otherwise-healthy run.
-	test.setTimeout(180_000);
+	// Two browser contexts sharing the runner with other workers: the default
+	// 90s budget is tight when the runner is busy, and a timeout here aborts an
+	// otherwise-healthy run.
+	test.setTimeout(240_000);
 
 	const [owner, guest] = await twoPlayers();
 	const ownerName = uniqueName("Owner");
@@ -81,6 +84,19 @@ test("farmhouse settings control visitors and farm presence", async ({
 		"Private",
 	);
 	await owner.getByTestId("house-close").click();
+
+	// A shovel click on the visitor is a cosmetic bonk, not a farm edit.
+	const guestSpot = await playerPosition(guest);
+	expect(guestSpot).not.toBeNull();
+	if (!guestSpot) throw new Error("the guest has no reported position");
+	await movePlayerNear(owner, guestSpot.x + 40, guestSpot.y, 12, {
+		reach: 48,
+	});
+	await owner.keyboard.press("7");
+	const victim = await playerPosition(guest);
+	if (!victim) throw new Error("the guest moved out of the world");
+	await clickWorld(owner, victim.x, victim.y - 32);
+	await expect(owner.getByTestId("farm-hint")).toContainText("BONK!");
 
 	await expect(guest.locator("canvas")).toHaveAttribute(
 		"aria-label",

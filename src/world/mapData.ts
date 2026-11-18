@@ -6,14 +6,34 @@ export const MAP_ROWS = 12;
 export const MAP_WIDTH = MAP_COLUMNS * TILE_SIZE;
 export const MAP_HEIGHT = MAP_ROWS * TILE_SIZE;
 
-/** Each purchase adds a two-tile band outside the original farm. */
-export const LAND_PRICES = [250, 500, 1000, 2000] as const;
+/**
+ * The full farm world, including the scenic land around the original plot.
+ * `farmBounds(level)` decides how much of it the player owns and can edit;
+ * the final land purchase unlocks all of it. This stays wider than the old
+ * 18x12 map so the camera can scroll on a widescreen instead of revealing
+ * unreachable decoration.
+ */
+export const FARM_WORLD_MIN_COLUMN = -6;
+export const FARM_WORLD_MAX_COLUMN = 24;
+export const FARM_WORLD_MIN_ROW = -4;
+export const FARM_WORLD_MAX_ROW = 11;
+export const FARM_WORLD_WIDTH =
+	(FARM_WORLD_MAX_COLUMN - FARM_WORLD_MIN_COLUMN + 1) * TILE_SIZE;
+export const FARM_WORLD_HEIGHT =
+	(FARM_WORLD_MAX_ROW - FARM_WORLD_MIN_ROW + 1) * TILE_SIZE;
+
+/**
+ * Each purchase expands the farm outward. The final parcel reaches the full
+ * world bounds above, so a fully bought farm is walkable and placeable to the
+ * edge of the widescreen view.
+ */
+export const LAND_PRICES = [250, 500, 1000, 2000, 4000] as const;
 export function farmBounds(level: number) {
 	return {
-		minColumn: level >= 2 ? -2 : 0,
-		maxColumn: level >= 3 ? 19 : 17,
-		minRow: level >= 4 ? -4 : level >= 1 ? -2 : 0,
-		maxRow: 11,
+		minColumn: level >= 5 ? FARM_WORLD_MIN_COLUMN : level >= 2 ? -2 : 0,
+		maxColumn: level >= 5 ? FARM_WORLD_MAX_COLUMN : level >= 3 ? 19 : 17,
+		minRow: level >= 4 ? FARM_WORLD_MIN_ROW : level >= 1 ? -2 : 0,
+		maxRow: FARM_WORLD_MAX_ROW,
 	};
 }
 export function ownsFarmTile(column: number, row: number, level: number): boolean {
@@ -145,7 +165,7 @@ export function isNearFarmTrain(x: number, y: number): boolean {
 
 /** Edit these rules to redraw the 64px terrain grid. */
 export function terrainAt(column: number, row: number): TerrainKey {
-	if (row === 11) return "water";
+	if (row >= 11) return "water";
 	if (row === 10) return "shore-north";
 	if ((column * 7 + row * 5) % 19 === 0) return "grass-flowers";
 	if ((column * 3 + row * 11) % 8 === 0) return "grass-tufts";

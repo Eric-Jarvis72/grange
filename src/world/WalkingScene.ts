@@ -1,6 +1,12 @@
 import * as ex from "excalibur";
 import type { HubArea } from "../../shared/types";
+import {
+	isInventoryBlockingInput,
+	useInventoryStore,
+} from "../inventory/inventoryStore";
+import { useNotificationStore } from "../notifications/notificationStore";
 import { useGameStore } from "../store";
+import { BonkFx } from "./bonkFx";
 import { depthForY } from "./depth";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
 import { FrameClock } from "./frameClock";
@@ -16,6 +22,8 @@ import { MAX_INTERACTION_DISTANCE } from "./interaction";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import { updateWalkingPlayer } from "./playerMovement";
 import type { WalkObstacle } from "./walkCollisions";
+import { cameraAxis } from "./viewport";
+import { publishViewTransform } from "./viewTransform";
 import { ensureSceneResources } from "./worldAssets";
 
 export type WorldArea =
@@ -71,7 +79,12 @@ interface WalkingSceneOptions {
 	hubArea?: HubArea | null;
 	onAreaChange: (area: WorldArea) => void;
 	onPromptChange: (prompt: string | null) => void;
+	/** Right edge of the walkable world; omit for the default map width. */
 	worldWidth?: number;
+	/** Top edge and bottom edge of the walkable world. */
+	worldMinX?: number;
+	worldHeight?: number;
+	worldMinY?: number;
 }
 
 export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
@@ -81,9 +94,22 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 	private traveling = false;
 	private paused = false;
 	private hubPlayers?: HubPlayers;
+	private bonkFx?: BonkFx;
 	private readonly playerSpeed = 160;
 	/** Wall-clock gameplay step; see `frameClock.ts`. */
 	protected readonly frameClock = new FrameClock();
+
+	/** A shovel click on another hub player is a cosmetic bonk. */
+	private readonly handleHubClick = (evt: ex.PointerEvent): void => {
+		if (this.paused || this.traveling || isInventoryBlockingInput()) return;
+		const inventory = useInventoryStore.getState();
+		if (inventory.hotbar[inventory.selectedHotbar]?.itemId !== "shovel") return;
+		const target = this.hubPlayers?.bonkAt(evt.worldPos.x, evt.worldPos.y);
+		if (!target) return;
+		this.bonkFx?.play(target.x, target.y - 40);
+		this.camera.shake(3, 3, 140);
+		useNotificationStore.getState().push("BONK!", "system");
+	};
 
 	constructor(private readonly options: WalkingSceneOptions) {
 		super();
@@ -102,6 +128,8 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		if (this.options.hubArea) {
 			const username = useGameStore.getState().username;
 			this.hubPlayers = new HubPlayers(this, this.player, username || "Farmer");
+			this.bonkFx = new BonkFx(this);
+			this.input.pointers.primary.on("down", this.handleHubClick);
 		}
 		this.camera.pos = ex.vec(MAP_WIDTH / 2, MAP_HEIGHT / 2);
 	}
@@ -151,13 +179,27 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 	}
 
 	/**
+	 * Applies the scene's viewport defaults. Indoor and outdoor scenes keep
+	 * the original 1:1 camera pacing so walking and train animations run at
+	 * the same speed as before; any side gutter uses the scene's backdrop
+	 * tone instead of the shared grass green.
+	 */
+	protected applyViewport(engine: ex.Engine): void {
+		if (this.backgroundColor) engine.backgroundColor = this.backgroundColor;
+		this.camera.zoom = 1;
+	}
+
+	/**
 	 * Runs one walking frame with a wall-clock step. Split out so a subclass
 	 * that also animates something (the marketplace train) can take a single
 	 * step for the frame instead of advancing each concern separately.
 	 */
 	protected walkFrame(engine: ex.Engine, step: number): void {
+		this.applyViewport(engine);
+		publishViewTransform(engine, this.camera);
 		// Other players keep moving while a DOM overlay pauses the local player.
 		this.updateHub(step);
+		this.bonkFx?.update(step);
 
 		if (!this.inputManager || this.paused) return;
 		// Freeze the player while a travel animation (the train leaving) plays.
@@ -174,16 +216,20 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 			step,
 			this.options.obstacles,
 			this.options.worldWidth,
+			this.options.worldHeight,
+			this.options.worldMinX,
+			this.options.worldMinY,
 		);
-		if (this.options.worldWidth && this.options.worldWidth > MAP_WIDTH)
+		if (this.options.worldWidth) {
+			const minX = this.options.worldMinX ?? 0;
+			const minY = this.options.worldMinY ?? 0;
+			const worldWidth = this.options.worldWidth;
+			const worldHeight = this.options.worldHeight ?? MAP_HEIGHT;
 			this.camera.pos = ex.vec(
-				ex.clamp(
-					this.player.pos.x,
-					MAP_WIDTH / 2,
-					this.options.worldWidth - MAP_WIDTH / 2,
-				),
-				MAP_HEIGHT / 2,
+				cameraAxis(this.player.pos.x, engine.halfDrawWidth, minX, worldWidth),
+				cameraAxis(this.player.pos.y, engine.halfDrawHeight, minY, worldHeight),
 			);
+		}
 		updateFarmerGraphics(this.player, direction);
 		if (this.options.hubArea) {
 			publishHubPosition(this.player.pos.x, this.player.pos.y);
@@ -236,6 +282,7 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		this.inputManager = undefined;
 		this.setPrompt(null);
 		this.hubPlayers?.clear();
+		this.bonkFx?.clear();
 		if (this.options.hubArea) leaveHub();
 	}
 

@@ -33,15 +33,18 @@ defmodule Grange.FarmFenceTest do
              FarmStore.action("Alice", %{"kind" => "remove_fence", "x" => 7, "y" => 5})
   end
 
-  test "fences reject water and occupied crop tiles" do
+  test "fences use tile corners, including around a crop and along the shoreline" do
     full_farm("Alice")
 
-    assert {:error, "out of bounds"} =
+    assert {:ok, _view} =
              FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 7, "y" => 10})
+
+    assert {:error, "out of bounds"} =
+             FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 7, "y" => 11})
 
     FarmStore.action("Alice", %{"kind" => "till", "x" => 2, "y" => 2})
 
-    assert {:error, "crop tile is in the way"} =
+    assert {:ok, _view} =
              FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 2, "y" => 2})
   end
 end

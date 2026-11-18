@@ -2,10 +2,13 @@ import * as ex from "excalibur";
 import type { InputVector } from "./InputManager";
 import { depthForY } from "./depth";
 import { MAX_FRAME_STEP_MS } from "./frameClock";
+import { LandBorderHint } from "./landBorder";
 import { farmBounds, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from "./mapData";
 import { farmWalkObstacles } from "./sceneObstacles";
 import { WALK_SPEED_MULTIPLIER } from "./testMode";
 import { moveAroundObstacles, type WalkObstacle } from "./walkCollisions";
+
+export { LandBorderHint };
 
 /** Farm movement uses the same speed as the other walking scenes. */
 export function updateFarmPlayer(
@@ -14,6 +17,7 @@ export function updateFarmPlayer(
 	delta: number,
 	speedMultiplier = 1,
 	landLevel = 0,
+	landHint?: LandBorderHint,
 ): void {
 	const bounds = farmBounds(landLevel);
 	updateWalkingPlayer(
@@ -27,6 +31,7 @@ export function updateFarmPlayer(
 		bounds.minColumn * TILE_SIZE,
 		bounds.minRow * TILE_SIZE,
 	);
+	landHint?.update(direction, player.pos, landLevel);
 }
 
 export function updateWalkingPlayer(

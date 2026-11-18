@@ -37,8 +37,23 @@ describe("prop placement", () => {
 			{ x: 576, y: 620 })).toMatch(/crop or tilled/);
 	});
 
-	it("gives every flower a small placement footprint", () => {
-		for (const asset of ["daisies", "marigolds", "blue-flowers"] as const) {
+	it("allows props on edge land only after the final purchase", () => {
+		const placement = {
+			x: -320,
+			y: -150,
+			width: 96,
+			height: 100,
+			ground: { left: -368, right: -272, top: -250, bottom: -150 },
+		};
+		expect(propPlacementReason(placement, [], [], { x: 0, y: 0 }, 4)).toMatch(
+			/on the farm/,
+		);
+		expect(
+			propPlacementReason(placement, [], [], { x: 0, y: 0 }, 5),
+		).toBeNull();
+	});
+
+	it("gives every flower a small placement footprint", () => {		for (const asset of ["daisies", "marigolds", "blue-flowers"] as const) {
 			expect(propObstacles([{ asset, x: 400, y: 400, width: 50 }],
 				farmPlacementFootprints)).toEqual([
 				{ left: 393.75, right: 406.25, top: 382, bottom: 400 },

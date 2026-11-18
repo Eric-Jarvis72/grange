@@ -21,6 +21,8 @@ defmodule Grange.FarmStore do
     Crops,
     Farm,
     FarmAction,
+    FarmAnimal,
+    FarmAnimals,
     FarmBootstrap,
     FarmFence,
     FarmFences,
@@ -80,6 +82,7 @@ defmodule Grange.FarmStore do
           sprinklers: FarmSprinklers.list(owner),
           sprinkler_count: farm.sprinkler_count,
           animals: farm.animals,
+          placed_animals: FarmAnimals.list(owner),
           land_level: farm.land_level,
           is_public: farm.is_public,
           visitor_edit: farm.visitor_edit,
@@ -169,6 +172,8 @@ defmodule Grange.FarmStore do
       FarmGate,
       FarmSprinkler,
       FarmProp,
+      Grange.NpcQuestRecord,
+      FarmAnimal,
       FarmRecord
     ]
     |> Enum.each(&Repo.delete_all/1)
@@ -199,10 +204,8 @@ defmodule Grange.FarmStore do
   end
 
   defp mutate_or_rollback(owner, actor, kind, x, y, opts) do
-    case mutate(owner, actor, kind, x, y, opts) do
-      {:error, reason} -> Repo.rollback(reason)
-      result -> result
-    end
+    with {:error, reason} <- mutate(owner, actor, kind, x, y, opts),
+         do: Repo.rollback(reason)
   end
 
   defp mutate(owner, _actor, :till, x, y, _opts) do
@@ -230,6 +233,12 @@ defmodule Grange.FarmStore do
 
   defp mutate(owner, _actor, :remove_gate, x, y, _opts),
     do: reorient_gates(owner, FarmGates.remove(owner, x, y))
+
+  defp mutate(owner, _actor, :place_animal, x, y, opts),
+    do: FarmAnimals.place(owner, opts[:animal], x, y)
+
+  defp mutate(owner, _actor, :remove_animal, x, y, _opts),
+    do: FarmAnimals.pickup(owner, x, y)
 
   defp mutate(owner, _actor, kind, x, y, _opts)
        when kind in [:place_sprinkler, :remove_sprinkler],
@@ -324,21 +333,8 @@ defmodule Grange.FarmStore do
     :ok
   end
 
-  @kinds %{
-    "till" => :till,
-    "plant" => :plant,
-    "water" => :water,
-    "harvest" => :harvest,
-    "place_fence" => :place_fence,
-    "remove_fence" => :remove_fence,
-    "place_gate" => :place_gate,
-    "remove_gate" => :remove_gate,
-    "place_sprinkler" => :place_sprinkler,
-    "remove_sprinkler" => :remove_sprinkler
-  }
-
   defp normalize(action) when is_map(action) do
-    kind = Map.get(@kinds, to_string(fetch(action, "kind")))
+    kind = FarmAction.kind(fetch(action, "kind"))
     x = to_integer(fetch(action, "x"))
     y = to_integer(fetch(action, "y"))
 

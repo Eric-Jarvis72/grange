@@ -30,6 +30,7 @@ import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
 import type { MarketplaceScene } from "./MarketplaceScene";
 import { MarketWindow } from "./MarketWindow";
 import { MARKETS } from "./marketData";
+import { NpcTradeWindow } from "./NpcTradeWindow";
 import { TravelMenu } from "./TravelMenu";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
@@ -39,6 +40,7 @@ import {
 } from "./useFarmObjectInventory";
 import { useHouseMenu } from "./useHouseMenu";
 import { useLivestockPurchase } from "./useLivestockPurchase";
+import { useNpcTrade } from "./useNpcTrade";
 import { useWorldEngine } from "./useWorldEngine";
 import { useWorldTravel } from "./useWorldTravel";
 import type { WorldArea } from "./WalkingScene";
@@ -140,6 +142,19 @@ export default function FarmMap() {
 	const [fishingOpen, setFishingOpen] = useState(false);
 	const [engineReady, setEngineReady] = useState(false);
 	const { houseOpen, openHouseMenu, closeHouseMenu } = useHouseMenu(sceneRef);
+	const {
+		status: npcStatus,
+		npcOpen,
+		npcMessage,
+		npcThanks,
+		npcBusy,
+		openNpc,
+		closeNpc,
+		acknowledgeIntro,
+		dismissThanks,
+		sell: sellToNpc,
+		buySeeds: buyNpcSeeds,
+	} = useNpcTrade(sceneRef, target, isOwner);
 	const { openFarmTravelMenu, openMarketplaceTravelMenu } = useWorldTravel({
 		target,
 		username,
@@ -177,6 +192,7 @@ export default function FarmMap() {
 		setCasinoOverlay,
 		setFishingOpen,
 		openHouseMenu,
+		openNpcTrade: openNpc,
 		openFarmTravelMenu,
 		openMarketplaceTravelMenu,
 	});
@@ -240,10 +256,11 @@ export default function FarmMap() {
 		<main
 			className="farm-map-page"
 			data-world-ready={worldReady ? "true" : "false"}
-data-player-x={Math.round(hud.player.x)}
+			data-player-x={Math.round(hud.player.x)}
 			data-player-y={Math.round(hud.player.y)}
 			data-hub-peers={hubPeers.join(",")}
 			data-farm-peers={farmPeers.join(",")}
+			data-npc-stage={npcStatus?.stage ?? "none"}
 			data-sprinklers={(farm?.sprinklers ?? [])
 				.map((s) => `${s.x},${s.y}`)
 				.join(";")}
@@ -298,6 +315,20 @@ data-player-x={Math.round(hud.player.x)}
 			{paused && <PauseMenu />}
 			{houseOpen && isOwner && farm && (
 				<HouseMenu owner={target ?? ""} farm={farm} onClose={closeHouseMenu} />
+			)}
+			{npcOpen && npcStatus && (
+				<NpcTradeWindow
+					status={npcStatus}
+					barn={farm?.barn ?? {}}
+					message={npcMessage}
+					thanks={npcThanks}
+					busy={npcBusy}
+					onClose={closeNpc}
+					onAcknowledge={acknowledgeIntro}
+					onDismissThanks={dismissThanks}
+					onSell={sellToNpc}
+					onBuySeeds={buyNpcSeeds}
+				/>
 			)}
 			<TravelMenu />
 			{fishingOpen && <FishingOverlay onClose={closeFishing} />}

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { remoteDirection, remoteStep, shouldSnap } from "./hubInterpolation";
+import {
+	BONK_DURATION_MS,
+	bonkPose,
+	remoteDirection,
+	remoteStep,
+	shouldSnap,
+} from "./hubInterpolation";
 
 describe("remoteStep", () => {
 	it("eases partway toward the target in one step", () => {
@@ -35,6 +41,31 @@ describe("shouldSnap", () => {
 
 	it("slides for a normal walking update", () => {
 		expect(shouldSnap({ x: 0, y: 0 }, { x: 60, y: 0 })).toBe(false);
+	});
+});
+
+describe("bonkPose", () => {
+	it("starts and ends at rest", () => {
+		expect(bonkPose(0, 1)).toEqual({ offsetX: 0, rotation: 0 });
+		expect(bonkPose(BONK_DURATION_MS, 1)).toEqual({
+			offsetX: 0,
+			rotation: 0,
+		});
+	});
+
+	it("knocks the avatar away from the attacker", () => {
+		const right = bonkPose(100, 1);
+		const left = bonkPose(100, -1);
+		expect(right.offsetX).toBeGreaterThan(0);
+		expect(left.offsetX).toBeLessThan(0);
+		expect(left.offsetX).toBeCloseTo(-right.offsetX, 6);
+	});
+
+	it("settles instead of drifting forever", () => {
+		const early = Math.abs(bonkPose(60, 1).offsetX);
+		const late = Math.abs(bonkPose(360, 1).offsetX);
+		expect(late).toBeLessThan(early);
+		expect(bonkPose(BONK_DURATION_MS * 2, 1).offsetX).toBe(0);
 	});
 });
 

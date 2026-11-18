@@ -49,6 +49,30 @@ defmodule Grange.BankLandTest do
     assert FarmStore.view(user.username).land_level == 1
   end
 
+  test "the final parcel reaches the full walkable map border", %{user: user} do
+    assert {:ok, _} = Accounts.apply_balance_delta(user.id, 10_000)
+
+    for _ <- 1..5 do
+      assert {:ok, _} = Land.buy(user.id, user.username)
+    end
+
+    assert FarmStore.view(user.username).land_level == 5
+    assert Land.bounds(5) == %{min_x: -6, max_x: 24, min_y: -4}
+
+    assert {:ok, _} =
+             FarmStore.action(user.username, %{"kind" => "till", "x" => -6, "y" => -4})
+
+    assert {:ok, _} =
+             FarmStore.action(user.username, %{"kind" => "till", "x" => 24, "y" => 9})
+
+    assert {:error, "out of bounds"} =
+             FarmStore.action(user.username, %{"kind" => "till", "x" => 25, "y" => 9})
+
+    # Fence corners run one tile past the last owned column.
+    assert {:ok, _} =
+             FarmStore.action(user.username, %{"kind" => "place_fence", "x" => 25, "y" => 10})
+  end
+
   test "one farm cannot buy land for another", %{user: user} do
     FarmStore.ensure("Other")
     assert {:error, "not your farm"} = Land.buy(user.id, "Other")

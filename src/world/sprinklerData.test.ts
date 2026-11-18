@@ -51,7 +51,8 @@ describe("sprinkler coordinates", () => {
 
 	it("requires both covered tiles to be on the map", () => {
 		expect(sprinklerInBounds(18, 8)).toBe(true);
-		expect(sprinklerInBounds(19, 8)).toBe(false);
+		expect(sprinklerInBounds(23, 8)).toBe(true);
+		expect(sprinklerInBounds(24, 8)).toBe(false);
 		expect(sprinklerInBounds(18, 9)).toBe(false);
 	});
 });
@@ -89,6 +90,13 @@ describe("sprinkler placement", () => {
 		expect(sprinklerPlacementReason(farm({ land_level: 0 }), 18, 6)).toBe(
 			"Buy this land from the mayor first.",
 		);
+		expect(sprinklerPlacementReason(farm({ land_level: 4 }), 23, 8)).toBe(
+			"Buy this land from the mayor first.",
+		);
+	});
+
+	it("allows the final land tier to cover the expanded map edge", () => {
+		expect(sprinklerPlacementReason(farm({ land_level: 5 }), 23, 8)).toBeNull();
 	});
 });
 

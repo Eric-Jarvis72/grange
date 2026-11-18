@@ -21,6 +21,12 @@ const TRACK_RESOLUTION = 1;
 const RAIL_FRACTION = 0.655;
 /** Extra padding past the map edge so the train is fully off-screen. */
 const OFFSCREEN_MARGIN = 8;
+/**
+ * How far the track art extends past the map on each side. The canvas can
+ * reveal scenic land on a wide browser, so the rails keep going even though
+ * the train's timed departure still ends at the map edge.
+ */
+const TRACK_SCENIC_MARGIN = 1024;
 /** How long each wheel pose is held at the train's top speed, in ms. The wheels
  * slow down when the train does (see `wheelSpeed`). */
 const WHEEL_FRAME_MS = 100;
@@ -71,15 +77,15 @@ export function findTrainRest(props: TrainProp[]): TrainRest {
 	return { x: prop.x, y: prop.y, width: prop.width };
 }
 
-/** Tiles a static, full-width track across the scene under the train. */
+/** Tiles a static track across the scene and its scenic side land. */
 function addTrainTracks(scene: ex.Scene, rest: TrainRest, scale: number): void {
 	const tileWidth = trainTracksImage.width * scale;
-	const copies = Math.ceil(MAP_WIDTH / tileWidth) + 1;
+	const end = MAP_WIDTH + TRACK_SCENIC_MARGIN;
 	const trackY =
 		rest.y - (RAIL_FRACTION - 0.5) * trainTracksImage.height * scale;
-	for (let i = 0; i < copies; i += 1) {
+	for (let x = -TRACK_SCENIC_MARGIN; x < end; x += tileWidth) {
 		const actor = new ex.Actor({
-			pos: ex.vec(i * tileWidth, trackY),
+			pos: ex.vec(x, trackY),
 			anchor: ex.vec(0, 0.5),
 			z: 1,
 		});
@@ -340,6 +346,11 @@ export class TrainController {
 		}
 	}
 
+	/**
+	 * Keeps the train's 2-second arrival/departure timing unchanged. The
+	 * scenic rails extend past the map for wide screens, but the train only
+	 * travels the original map-edge distance before the scene changes.
+	 */
 	private offscreenLeftX(): number {
 		return -this.rest.width / 2 - OFFSCREEN_MARGIN;
 	}

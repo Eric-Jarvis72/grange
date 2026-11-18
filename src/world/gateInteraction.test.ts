@@ -11,13 +11,13 @@ const gate = (x: number, y: number, open: boolean): FenceGate => ({
 
 describe("gate interaction", () => {
 	it("offers the open prompt for a closed gate in range", () => {
-		const nearby = nearbyGate([gate(4, 4, false)], { x: 288, y: 320 });
+		const nearby = nearbyGate([gate(4, 4, false)], { x: 256, y: 288 });
 		expect(nearby?.gate).toMatchObject({ x: 4, y: 4 });
 		expect(nearby?.prompt).toBe("Press E or Enter to open gate");
 	});
 
 	it("offers the close prompt once the gate is open", () => {
-		const nearby = nearbyGate([gate(4, 4, true)], { x: 288, y: 320 });
+		const nearby = nearbyGate([gate(4, 4, true)], { x: 256, y: 288 });
 		expect(nearby?.prompt).toBe("Press E or Enter to close gate");
 	});
 

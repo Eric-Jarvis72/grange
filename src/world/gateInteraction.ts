@@ -15,8 +15,8 @@ export function nearbyGate(
 ): NearbyGate | null {
 	let closest: { gate: FenceGate; distance: number } | null = null;
 	for (const gate of gates) {
-		const x = gate.x * TILE_SIZE + TILE_SIZE / 2;
-		const y = gate.y * TILE_SIZE + TILE_SIZE / 2;
+		const x = gate.x * TILE_SIZE;
+		const y = gate.y * TILE_SIZE;
 		const distance = Math.hypot(player.x - x, player.y - y);
 		if (distance > radius) continue;
 		if (!closest || distance < closest.distance) closest = { gate, distance };
