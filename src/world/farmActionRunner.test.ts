@@ -21,12 +21,17 @@ function farmWithTile(state: ActiveFarm["tiles"][number]["state"]): ActiveFarm {
 		tomatoes: 0,
 		barn: {},
 		animals: {},
+		is_public: false,
+		visitor_edit: false,
 		fences: [],
 		fence_count: 0,
 		gates: [],
 		gate_count: 0,
+		sprinklers: [],
+		sprinkler_count: 0,
 		prop_overrides: [],
 		prop_inventory: {},
+		storage: {},
 	};
 }
 

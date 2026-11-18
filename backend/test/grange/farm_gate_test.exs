@@ -2,16 +2,18 @@ defmodule Grange.FarmGateTest do
   @moduledoc false
   use ExUnit.Case, async: false
 
+  import Grange.FarmFixtures
+
   alias Grange.{FarmGateActions, FarmStore}
 
   setup do
-    FarmStore.reset()
+    reset_farm_state()
     :ok
   end
 
   test "gates persist, consume a separate supply, toggle, and reorient" do
-    FarmStore.ensure("Alice")
-    FarmStore.ensure("Bob")
+    full_farm("Alice")
+    full_farm("Bob")
 
     assert {:ok, view} = FarmStore.action("Alice", %{"kind" => "place_gate", "x" => 7, "y" => 5})
     assert view.gates == [%{x: 7, y: 5, direction: "horizontal", open: false}]
@@ -49,7 +51,7 @@ defmodule Grange.FarmGateTest do
   end
 
   test "a gate cannot share a tile with a fence" do
-    FarmStore.ensure("Alice")
+    full_farm("Alice")
     FarmStore.action("Alice", %{"kind" => "place_fence", "x" => 4, "y" => 4})
 
     assert {:error, "fence already here"} =

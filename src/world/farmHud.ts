@@ -11,6 +11,7 @@ export interface FarmHudSnapshot {
 	tomatoes: number;
 	message: string;
 	hovered: FarmHoveredTile | null;
+	player: { x: number; y: number };
 }
 
 export function hoveredFarmTile(x: number, y: number,

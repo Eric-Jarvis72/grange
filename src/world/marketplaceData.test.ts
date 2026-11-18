@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MAP_HEIGHT } from "./mapData";
 import {
+	MARKETPLACE_MIN_COLUMN,
+	MARKETPLACE_MIN_ROW,
 	MARKETPLACE_PRODUCE_MARKET_ENTRANCE,
 	MARKETPLACE_SEED_MARKET_ENTRANCE,
 	MARKETPLACE_TRAIN_STOP,
@@ -11,6 +13,15 @@ import {
 } from "./marketplaceData";
 
 describe("marketplace map data", () => {
+	it("leaves open construction space to the left and above", () => {
+		expect(MARKETPLACE_MIN_COLUMN).toBeLessThan(0);
+		expect(MARKETPLACE_MIN_ROW).toBeLessThan(0);
+		expect(marketplaceTerrainAt(MARKETPLACE_MIN_COLUMN, MARKETPLACE_MIN_ROW)).toBe(
+			"grass",
+		);
+		expect(MARKETPLACE_WIDTH).toBe(2048);
+	});
+
 	it("creates two main paths with three intersections", () => {
 		for (const row of [5, 9]) {
 			expect(marketplaceTerrainAt(3, row)).toBe("path-horizontal");

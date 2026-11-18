@@ -3,7 +3,7 @@ defmodule Grange.FarmFences do
 
   import Ecto.Query
 
-  alias Grange.{FarmFence, FarmGate, FarmRecord, Repo, Tile}
+  alias Grange.{FarmFence, FarmGate, FarmRecord, Repo}
 
   @doc "Every fence on the farm as a list of `%{x:, y:}`."
   @spec list(String.t()) :: [map()]
@@ -37,9 +37,6 @@ defmodule Grange.FarmFences do
       gate_at(owner, x, y) ->
         {:error, "gate already here"}
 
-      tile_at(owner, x, y) ->
-        {:error, "crop tile is in the way"}
-
       true ->
         Repo.insert!(%FarmFence{owner: owner, x: x, y: y})
         Repo.update!(Ecto.Changeset.change(farm, fence_count: farm.fence_count - 1))
@@ -64,9 +61,5 @@ defmodule Grange.FarmFences do
 
   defp gate_at(owner, x, y) do
     Repo.one(from(g in FarmGate, where: g.owner == ^owner and g.x == ^x and g.y == ^y))
-  end
-
-  defp tile_at(owner, x, y) do
-    Repo.one(from(t in Tile, where: t.owner == ^owner and t.x == ^x and t.y == ^y))
   end
 end

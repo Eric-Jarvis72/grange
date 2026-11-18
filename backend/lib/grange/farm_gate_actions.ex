@@ -21,9 +21,15 @@ defmodule Grange.FarmGateActions do
 
   def toggle(_owner, _action), do: {:error, "invalid gate action"}
 
+  @world_min_x -6
+  @world_max_corner_x 25
+  @world_min_y -4
+  @world_max_corner_y 10
+
   defp valid?(kind, x, y) do
     kind == "toggle_gate" and is_integer(x) and is_integer(y) and
-      x in -2..19 and y in -4..9
+      x >= @world_min_x and x <= @world_max_corner_x and
+      y >= @world_min_y and y <= @world_max_corner_y
   end
 
   defp apply_toggle(owner, x, y) do

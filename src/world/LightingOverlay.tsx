@@ -1,22 +1,22 @@
-import { useEffect, useRef } from "react";
 import type * as ex from "excalibur";
-import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
+import { useEffect, useRef } from "react";
+import { useGameStore } from "../store";
 import { LightingLayer } from "./lightingLayer";
 import { getLightSources } from "./lightSources";
-import { useGameStore } from "../store";
+import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import type { WorldArea } from "./WalkingScene";
 
 interface LightingOverlayProps {
 	engine: ex.Engine | null;
 	area: WorldArea;
-	getGameCanvas: () => HTMLCanvasElement | null;
+	gameCanvasRef: { current: HTMLCanvasElement | null };
 }
 
 /** A full-screen canvas overlay that tints the world for the current phase. */
 export function LightingOverlay({
 	engine,
 	area,
-	getGameCanvas,
+	gameCanvasRef,
 }: LightingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -25,7 +25,7 @@ export function LightingOverlay({
 		if (!engine || !canvas) return;
 		const layer = new LightingLayer(canvas, {
 			resolution: { width: MAP_WIDTH, height: MAP_HEIGHT },
-			getGameCanvas,
+			getGameCanvas: () => gameCanvasRef.current,
 			getTime: () => useGameStore.getState().worldTime,
 			getCamera: () => {
 				const camera = engine.currentScene?.camera;
@@ -37,9 +37,7 @@ export function LightingOverlay({
 		});
 		layer.start();
 		return () => layer.stop();
-	}, [engine, area, getGameCanvas]);
+	}, [engine, area, gameCanvasRef]);
 
-	return (
-		<canvas ref={canvasRef} className="farm-map-lighting-canvas" />
-	);
+	return <canvas ref={canvasRef} className="farm-map-lighting-canvas" />;
 }

@@ -3,7 +3,7 @@ defmodule Grange.FarmGates do
 
   import Ecto.Query
 
-  alias Grange.{FarmFence, FarmGate, FarmRecord, Repo, Tile}
+  alias Grange.{FarmFence, FarmGate, FarmRecord, Repo}
 
   @doc "Every gate on the farm with its swing direction and open state."
   @spec list(String.t()) :: [map()]
@@ -36,9 +36,6 @@ defmodule Grange.FarmGates do
 
       fence_at(owner, x, y) ->
         {:error, "fence already here"}
-
-      tile_at(owner, x, y) ->
-        {:error, "crop tile is in the way"}
 
       true ->
         Repo.insert!(%FarmGate{
@@ -125,9 +122,5 @@ defmodule Grange.FarmGates do
 
   defp fence_at(owner, x, y) do
     Repo.one(from(f in FarmFence, where: f.owner == ^owner and f.x == ^x and f.y == ^y))
-  end
-
-  defp tile_at(owner, x, y) do
-    Repo.one(from(t in Tile, where: t.owner == ^owner and t.x == ^x and t.y == ^y))
   end
 end

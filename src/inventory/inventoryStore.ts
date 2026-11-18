@@ -55,6 +55,7 @@ interface InventoryState {
 	hotbar: InventorySlot[];
 	selectedHotbar: number;
 	inventoryOpen: boolean;
+	barnOpen: boolean;
 	/** True once the account's full inventory snapshot has been applied (or failed). */
 	inventoryHydrated: boolean;
 	/** True only when the last snapshot came from the server. */
@@ -62,6 +63,7 @@ interface InventoryState {
 	selectHotbar: (index: number) => void;
 	setInventoryOpen: (open: boolean) => void;
 	toggleInventory: () => void;
+	setBarnOpen: (open: boolean) => void;
 	moveStack: (from: SlotRef, to: SlotRef) => void;
 	/** Sends a stack to the other area (hotbar <-> grid), topping up existing
 	 *  partial stacks of the same item first, then the first empty slot.
@@ -89,6 +91,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 	hotbar: buildInitialHotbar(),
 	selectedHotbar: 0,
 	inventoryOpen: false,
+	barnOpen: false,
 	inventoryHydrated: false,
 	inventorySynced: false,
 
@@ -99,6 +102,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
 	setInventoryOpen: (open) => set({ inventoryOpen: open }),
 	toggleInventory: () => set((s) => ({ inventoryOpen: !s.inventoryOpen })),
+	setBarnOpen: (open) => set({ barnOpen: open }),
 
 	moveStack: (from, to) => {
 		if (from.area === to.area && from.index === to.index) return;
@@ -300,6 +304,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 			hotbar: buildInitialHotbar(),
 			selectedHotbar: 0,
 			inventoryOpen: false,
+			barnOpen: false,
 			inventoryHydrated: false,
 			inventorySynced: false,
 		}),
@@ -307,22 +312,14 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
 
 /**
  * Excalibur scene polls this to freeze movement while an overlay captures
- * input (inventory modal or pause menu).
+ * input (inventory modal, barn storage, or pause menu).
  */
 export function isInventoryBlockingInput(): boolean {
 	return (
 		useInventoryStore.getState().inventoryOpen ||
+		useInventoryStore.getState().barnOpen ||
 		usePauseStore.getState().paused
 	);
 }
 
-export function countItem(
-	state: Pick<InventoryState, "grid" | "hotbar">,
-	itemId: ItemId,
-): number {
-	let total = 0;
-	for (const slot of [...state.grid, ...state.hotbar]) {
-		if (slot.itemId === itemId) total += slot.count;
-	}
-	return total;
-}
+export { countItem, freeSpaceFor } from "./inventoryQueries";

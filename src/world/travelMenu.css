@@ -1,0 +1,29 @@
+.travel-panel {
+	width: min(24rem, 100%);
+}
+
+.travel-option {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+.travel-option-label {
+	display: block;
+}
+
+.travel-option-detail {
+	display: block;
+	font-family: var(--font-body, sans-serif);
+	font-size: 0.68rem;
+	letter-spacing: 0.02em;
+	color: #9a8b72;
+	text-shadow: none;
+}
+
+.travel-empty {
+	margin: 0;
+	text-align: center;
+	font-size: 0.8rem;
+	color: #9a8b72;
+}

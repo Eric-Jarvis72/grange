@@ -1,13 +1,13 @@
 .farm-map-page {
 	position: fixed;
 	inset: 0;
-	display: grid;
-	place-items: center;
 	overflow: hidden;
 	background: #79a44d;
 }
 
 .farm-map-canvas {
+	position: absolute;
+	inset: 0;
 	display: block;
 	width: 100%;
 	height: 100%;
@@ -24,9 +24,28 @@
 	z-index: 2;
 }
 
-.farm-map-travel-prompt-closed {
-	border-color: #a33b30;
-	color: #ff9b8c;
+/* Keep tool feedback readable and away from the bottom hotbar/chat. */
+.farm-hud {
+	position: absolute;
+	top: 1rem;
+	left: 1rem;
+	z-index: 21;
+	max-width: min(22rem, calc(100vw - 2rem));
+	padding: 0.5rem 0.7rem;
+	border: 1px solid #6e4b27;
+	border-radius: 0.5rem;
+	background: rgba(35, 25, 17, 0.9);
+	color: #fff3cf;
+	font-size: 0.8rem;
+	pointer-events: none;
+}
+
+.farm-hint {
+	margin: 0.2rem 0 0;
+}
+.farm-status {
+	color: #a7c957;
+	font-weight: 700;
 }
 
 .farm-map-travel-prompt {
@@ -44,6 +63,11 @@
 	font-weight: 700;
 	letter-spacing: 0.02em;
 	pointer-events: none;
+}
+
+.farm-map-travel-prompt-closed {
+	border-color: #a33b30;
+	color: #ff9b8c;
 }
 
 /* Grangecoin wallet counter shown in the HUD, bottom-right. */
@@ -72,7 +96,9 @@
 	letter-spacing: 0.03em;
 	pointer-events: none;
 	opacity: 1;
-	transition: opacity 0.35s ease, transform 0.35s ease;
+	transition:
+		opacity 0.35s ease,
+		transform 0.35s ease;
 	z-index: 30;
 }
 

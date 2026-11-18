@@ -32,7 +32,9 @@ defmodule Grange.MixProject do
   def application do
     [
       mod: {Grange.Application, []},
-      extra_applications: [:logger, :runtime_tools, :crypto]
+      # :inets/:ssl back the Mailtrap REST client (Grange.Mailer.Mailtrap uses
+      # :httpc over HTTPS); without them delivery fails at runtime.
+      extra_applications: [:logger, :runtime_tools, :crypto, :inets, :ssl]
     ]
   end
 

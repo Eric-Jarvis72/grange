@@ -27,6 +27,7 @@ export class CasinoScene extends WalkingScene {
 		super({
 			area: "Casino",
 			spawn: ex.vec(CASINO_PLAYER_SPAWN.x, CASINO_PLAYER_SPAWN.y),
+			hubArea: "casino",
 			obstacles: casinoWalkObstacles,
 			interactions: [
 				{

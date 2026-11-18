@@ -27,7 +27,8 @@ defmodule Grange.FarmView do
       planted: Map.get(counts, :planted, 0),
       watered: Map.get(counts, :watered, 0),
       ready: Map.get(counts, :ready, 0),
-      tomatoes: tomatoes
+      tomatoes: tomatoes,
+      is_public: farm.is_public
     }
   end
 

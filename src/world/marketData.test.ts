@@ -93,6 +93,27 @@ describe("market definitions", () => {
 		expect(MARKET_ITEMS.master.price).toBe(10_000);
 	});
 
+	it("offers the sprinkler at the hardware store", () => {
+		expect(MARKETS.hardware.categories).toEqual([
+			"equipment",
+			"build",
+			"supplies",
+		]);
+		expect(MARKETS.hardware.defaultCategory).toBe("equipment");
+		expect(MARKET_CATEGORIES.supplies.items).toEqual(["sprinkler"]);
+		expect(MARKET_CATEGORIES.equipment.items).toEqual([
+			"hoe",
+			"watering-can",
+			"scythe",
+			"shovel",
+		]);
+		expect(MARKET_CATEGORIES.build.items).toEqual(["fence", "gate"]);
+		expect(MARKET_ITEMS.sprinkler.kind).toBe("buy");
+		expect(MARKET_ITEMS.sprinkler.price).toBe(75);
+		expect(MARKET_ITEMS.fence.price).toBe(5);
+		expect(MARKET_ITEMS.gate.price).toBe(25);
+	});
+
 	it("clamps sell quantities into the 1..max range", () => {
 		expect(clampQuantity(5, 10)).toBe(5);
 		expect(clampQuantity(0, 10)).toBe(1);

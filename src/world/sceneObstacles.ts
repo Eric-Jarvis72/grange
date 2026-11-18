@@ -39,6 +39,7 @@ const marketplaceFootprints: Partial<
 	"game-hall": { width: 0.9, depth: 115 },
 	"livestock-pavilion": { width: 0.8, depth: 68 },
 	"village-bank": { width: 0.86, depth: 78 },
+	"hardware-store": { width: 0.9, depth: 88 },
 	"seed-display": { width: 0.85, depth: 45 },
 	"produce-cart": { width: 0.85, depth: 55 },
 	"notice-board": { width: 0.75, depth: 35 },
@@ -53,9 +54,9 @@ const marketplaceFootprints: Partial<
 const casinoFootprints: Partial<Record<CasinoAssetKey, PropFootprint>> = {
 	"wall-panel": { width: 1, depth: 45 },
 	"wall-post": { width: 0.8, depth: 55 },
-	"poker-table": { width: 0.9, depth: 90 },
-	"blackjack-table": { width: 0.9, depth: 90 },
-	"roulette-table": { width: 0.9, depth: 90 },
+	"poker-table": { width: 0.9, depth: 70 },
+	"blackjack-table": { width: 0.9, depth: 70 },
+	"roulette-table": { width: 0.9, depth: 70 },
 	"chair-front-left": { width: 0.8, depth: 40 },
 	"chair-front-right": { width: 0.8, depth: 40 },
 	"slot-machine": { width: 0.85, depth: 55 },
@@ -80,7 +81,7 @@ let currentFarmLandLevel = 0;
 function rebuildFarmObstacles(): void {
 	const bounds = farmBounds(currentFarmLandLevel);
 	const water = { left: bounds.minColumn * TILE_SIZE,
-		right: (bounds.maxColumn + 1) * TILE_SIZE, top: 11 * TILE_SIZE, bottom: MAP_HEIGHT };
+		right: (bounds.maxColumn + 1) * TILE_SIZE, top: 11 * TILE_SIZE - 36, bottom: MAP_HEIGHT };
 	farmWalkObstacles.splice(0, Infinity,
 		...propObstacles(currentFarmProps, farmFootprints),
 		...fenceObstacles(currentFarmFences, currentFarmGates),

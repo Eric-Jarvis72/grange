@@ -12,19 +12,19 @@ export class BankScene extends WalkingScene {
 		onAreaChange: (area: WorldArea) => void, onTalk: (desk: BankDesk) => void) {
 		super({
 			area: "Bank",
-			spawn: ex.vec(576, 650),
+			spawn: ex.vec(576, 675),
 			obstacles: [
-				{ left: 0, right: 1152, top: 0, bottom: 345 },
-				{ left: 0, right: 70, top: 0, bottom: 768 },
-				{ left: 1080, right: 1152, top: 0, bottom: 768 },
+				{ left: 0, right: 1152, top: 0, bottom: 460 },
+				{ left: 0, right: 181, top: 0, bottom: 768 },
+				{ left: 971, right: 1152, top: 0, bottom: 768 },
 			],
 			interactions: [
-				{ position: ex.vec(576, 700), destination: "marketplace",
+				{ position: ex.vec(576, 714), destination: "marketplace",
 					destinationSpawn: { x: MARKETPLACE_BANK_ENTRANCE.x, y: MARKETPLACE_BANK_ENTRANCE.y + 60 },
 					prompt: "Press E or Enter to leave the bank", radius: 60 },
-				{ position: ex.vec(440, 390), prompt: "Press E or Enter to talk to bank teller",
+				{ position: ex.vec(470, 472), prompt: "Press E or Enter to talk to bank teller",
 					radius: 125, action: () => onTalk("teller") },
-				{ position: ex.vec(960, 390), prompt: "Press E or Enter to talk to mayor",
+				{ position: ex.vec(876, 472), prompt: "Press E or Enter to talk to mayor",
 					radius: 125, action: () => onTalk("mayor") },
 			],
 			onAreaChange,
@@ -34,7 +34,7 @@ export class BankScene extends WalkingScene {
 
 	override onInitialize(): void {
 		this.backgroundColor = ex.Color.fromHex("#9d724a");
-		this.addImage(bankInterior, MAP_WIDTH / 2, MAP_HEIGHT - 5, MAP_WIDTH, 0);
+		this.addImage(bankInterior, MAP_WIDTH / 2, MAP_HEIGHT - 5, 900, 0);
 		this.addPlayer();
 	}
 

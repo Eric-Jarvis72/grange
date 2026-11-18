@@ -187,12 +187,23 @@ export function GenericCategoryGrid({
 							className="market-generic-card"
 							data-testid={`market-item-${id}`}
 						>
-							<span className="market-generic-emoji" aria-hidden="true">
-								{item.emoji}
-							</span>
+							{item.icon ? (
+								<img
+									className="market-generic-icon"
+									src={item.icon}
+									alt=""
+									aria-hidden="true"
+								/>
+							) : (
+								<span className="market-generic-emoji" aria-hidden="true">
+									{item.emoji}
+								</span>
+							)}
 							<span className="market-card-name">{item.name}</span>
 							<span className="market-card-price">{item.blurb}</span>
-							<span className="market-stock">Owned: {control.owned}</span>
+							<span className="market-stock" data-testid={`market-owned-${id}`}>
+								Owned: {control.owned}
+							</span>
 							<button
 								type="button"
 								className="market-btn market-btn-buy"

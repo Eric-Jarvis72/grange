@@ -1,6 +1,11 @@
 import type { FenceGate, GateDirection } from "../../shared/types";
-import { TILE_SIZE } from "./mapData";
-import type { TileCoord } from "./blocking";
+import {
+	FARM_WORLD_MAX_COLUMN,
+	FARM_WORLD_MIN_COLUMN,
+	FARM_WORLD_MIN_ROW,
+	farmBounds,
+	TILE_SIZE,
+} from "./mapData";
 import type { WalkObstacle } from "./walkCollisions";
 
 export interface FenceCoord { x: number; y: number }
@@ -13,12 +18,20 @@ export const edgeKey = (edge: FenceEdge) =>
 	`${fenceKey(edge.from.x, edge.from.y)}|${fenceKey(edge.to.x, edge.to.y)}`;
 
 export const fenceInBounds = (x: number, y: number) =>
-	Number.isInteger(x) && Number.isInteger(y) && x >= -2 && x <= 19 && y >= -4 && y <= 9;
+	Number.isInteger(x) && Number.isInteger(y) &&
+	x >= FARM_WORLD_MIN_COLUMN && x <= FARM_WORLD_MAX_COLUMN + 1 &&
+	y >= FARM_WORLD_MIN_ROW && y <= 10;
 
-/** One post at the center of each 64px ground tile; connections are derived. */
+export function ownsFenceCorner(x: number, y: number, level: number): boolean {
+	const bounds = farmBounds(level);
+	return fenceInBounds(x, y) && x >= bounds.minColumn && x <= bounds.maxColumn + 1 &&
+		y >= bounds.minRow && y <= 10;
+}
+
+/** Posts sit on tile corners; connected rails run along tile edges. */
 export function buildFenceGraph(coords: FenceCoord[]): { nodes: FenceNode[]; edges: FenceEdge[] } {
 	const unique = new Map(coords.filter(({ x, y }) => fenceInBounds(x, y))
-		.map(({ x, y }) => [fenceKey(x, y), { x, y, worldX: x * TILE_SIZE + 32, worldY: y * TILE_SIZE + 32 }]));
+		.map(({ x, y }) => [fenceKey(x, y), { x, y, worldX: x * TILE_SIZE, worldY: y * TILE_SIZE }]));
 	const nodes = [...unique.values()];
 	const edges: FenceEdge[] = [];
 	for (const node of nodes) {
@@ -100,8 +113,4 @@ export function fenceObstacles(coords: FenceCoord[], gates: FenceGate[] = []): W
 			? { left: edge.from.worldX, right: edge.to.worldX, top: edge.from.worldY - 12, bottom: edge.from.worldY + 5 }
 			: { left: edge.from.worldX - 10, right: edge.from.worldX + 10, top: edge.from.worldY, bottom: edge.to.worldY }),
 	];
-}
-
-export function fenceBlockedTiles(coords: FenceCoord[], gates: FenceGate[] = []): TileCoord[] {
-	return fenceGraph(coords, gates).nodes.map(({ x, y }) => ({ column: x, row: y }));
 }

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { FenceGate } from "../../shared/types";
 import {
 	buildFenceGraph,
-	fenceBlockedTiles,
 	fenceInBounds,
 	fenceObstacles,
 	gateDirectionFor,
@@ -24,8 +23,9 @@ describe("placeable fences", () => {
 		expect(fenceInBounds(0, 0)).toBe(true);
 		expect(fenceInBounds(17, 9)).toBe(true);
 		expect(fenceInBounds(18, 9)).toBe(true);
-		expect(fenceInBounds(20, 9)).toBe(false);
-		expect(fenceInBounds(1, 10)).toBe(false);
+		expect(fenceInBounds(25, 9)).toBe(true);
+		expect(fenceInBounds(26, 9)).toBe(false);
+		expect(fenceInBounds(1, 10)).toBe(true);
 	});
 
 	it("joins horizontal, vertical, and corner neighbors exactly once", () => {
@@ -34,17 +34,16 @@ describe("placeable fences", () => {
 		]);
 		expect(nodes).toHaveLength(3);
 		expect(edges.map(({ direction }) => direction)).toEqual(["horizontal", "vertical"]);
-		expect(nodes[0]).toMatchObject({ worldX: 480, worldY: 416 });
+		expect(nodes[0]).toMatchObject({ worldX: 448, worldY: 384 });
 		expect(edges[0].to.worldX - edges[0].from.worldX).toBe(64);
 		expect(edges[1].to.worldY - edges[1].from.worldY).toBe(64);
 	});
 
-	it("removing a post also removes its connections and blocked tile", () => {
+	it("removing a post also removes its connections", () => {
 		const before = [{ x: 7, y: 6 }, { x: 8, y: 6 }, { x: 9, y: 6 }];
 		expect(buildFenceGraph(before).edges).toHaveLength(2);
 		const after = before.filter(({ x }) => x !== 8);
 		expect(buildFenceGraph(after).edges).toHaveLength(0);
-		expect(fenceBlockedTiles(after)).toEqual([{ column: 7, row: 6 }, { column: 9, row: 6 }]);
 		expect(fenceObstacles(after)).toHaveLength(2);
 	});
 });
@@ -116,7 +115,7 @@ describe("gates", () => {
 
 	it("blocks walking through a closed gate and allows it when open", () => {
 		const fences = [{ x: 2, y: 1 }];
-		const start = { x: 128, y: 130 };
+		const start = { x: 96, y: 100 };
 		const closed = fenceObstacles(fences, [gate(1, 1, "horizontal", false)]);
 		const open = fenceObstacles(fences, [gate(1, 1, "horizontal", true)]);
 
@@ -126,13 +125,13 @@ describe("gates", () => {
 			blocked = moveAroundObstacles(blocked.x, blocked.y, 0, -2, closed);
 			passable = moveAroundObstacles(passable.x, passable.y, 0, -2, open);
 		}
-		expect(blocked.y).toBeGreaterThan(110);
-		expect(passable.y).toBeLessThan(90);
+		expect(blocked.y).toBeGreaterThan(75);
+		expect(passable.y).toBeLessThan(40);
 	});
 
 	it("opens the correct vertical rail", () => {
 		const fences = [{ x: 1, y: 2 }];
-		const start = { x: 130, y: 128 };
+		const start = { x: 100, y: 96 };
 		const closed = fenceObstacles(fences, [gate(1, 1, "vertical", false)]);
 		const open = fenceObstacles(fences, [gate(1, 1, "vertical", true)]);
 
@@ -142,7 +141,7 @@ describe("gates", () => {
 			blocked = moveAroundObstacles(blocked.x, blocked.y, -2, 0, closed);
 			passable = moveAroundObstacles(passable.x, passable.y, -2, 0, open);
 		}
-		expect(blocked.x).toBeGreaterThan(114);
-		expect(passable.x).toBeLessThan(80);
+		expect(blocked.x).toBeGreaterThan(75);
+		expect(passable.x).toBeLessThan(40);
 	});
 });

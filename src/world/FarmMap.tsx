@@ -1,5 +1,5 @@
-import * as ex from "excalibur";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type * as ex from "excalibur";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Hud } from "../inventory/Hud";
 import { InventoryPanel } from "../inventory/InventoryPanel";
@@ -7,47 +7,50 @@ import { farmToolForItem } from "../inventory/items";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { PauseMenu } from "../pause/PauseMenu";
 import { usePauseStore } from "../pause/pauseStore";
-import { emitLeaveFarm, emitVisitFarm } from "../socket";
+import { emitLeaveFarm, emitPauseFarmVisit, emitVisitFarm } from "../socket";
 import { useGameStore } from "../store";
 import "../inventory/inventory.css";
 import { useInventoryStore } from "../inventory/inventoryStore";
 import { useInventoryKeys } from "../inventory/useInventoryKeys";
 import { useInventoryPersistence } from "../inventory/useInventoryPersistence";
-import { BankScene, type BankDesk } from "./BankScene";
+import type { BankDesk, BankScene } from "./BankScene";
 import { BankWindow } from "./BankWindow";
-import { bankResources } from "./bankResources";
 import { type CasinoOverlay, CasinoOverlays } from "./CasinoOverlays";
-import { CasinoScene } from "./CasinoScene";
+import type { CasinoScene } from "./CasinoScene";
 import { ComboCounter } from "./ComboCounter";
-import { casinoResources } from "./casinoResources";
-import { FarmMapScene } from "./FarmMapScene";
+import type { FarmMapScene } from "./FarmMapScene";
+import { FarmStatusHud } from "./FarmStatusHud";
 import { FishingOverlay } from "./FishingOverlay";
 import type { FarmHudSnapshot } from "./farmHud";
+import { subscribeFarmPeers } from "./farmPresence";
 import "./farmMap.css";
-import { MarketplaceScene } from "./MarketplaceScene";
-import { MarketWindow } from "./MarketWindow";
-import { LivestockMarketScene } from "./LivestockMarketScene";
-import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
+import { HouseMenu } from "./HouseMenu";
+import { leaveHub, subscribeHubPeers } from "./hubClient";
 import { LightingOverlay } from "./LightingOverlay";
-import { livestockResources } from "./livestockResources";
-import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
+import type { LivestockMarketScene } from "./LivestockMarketScene";
+import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
+import type { MarketplaceScene } from "./MarketplaceScene";
+import { MarketWindow } from "./MarketWindow";
 import { MARKETS } from "./marketData";
-import { marketplaceResources } from "./marketplaceResources";
-import { resources } from "./resources";
+import { NpcTradeWindow } from "./NpcTradeWindow";
 import { SleepVoteToast } from "./SleepVoteToast";
+import { TravelMenu } from "./TravelMenu";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
-import { useFarmItemNotices, useFarmObjectInventory } from "./useFarmObjectInventory";
+import {
+	useFarmItemNotices,
+	useFarmObjectInventory,
+} from "./useFarmObjectInventory";
+import { useHouseMenu } from "./useHouseMenu";
 import { useLivestockPurchase } from "./useLivestockPurchase";
+import { useNpcTrade } from "./useNpcTrade";
+import { useWorldEngine } from "./useWorldEngine";
+import { useWorldTravel } from "./useWorldTravel";
 import type { WorldArea } from "./WalkingScene";
-
-const worldResources = [
-	...new Set([...resources, ...marketplaceResources, ...casinoResources, ...livestockResources, ...bankResources]),
-];
 
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
-	const getGameCanvas = useCallback(() => canvasRef.current, []);
+	const engineRef = useRef<ex.Engine | null>(null);
 	const [gameEngine, setGameEngine] = useState<ex.Engine | null>(null);
 	useInventoryKeys();
 	const sceneRef = useRef<FarmMapScene | null>(null);
@@ -72,10 +75,12 @@ export default function FarmMap() {
 		tomatoes: 0,
 		message: "Hoe: click or drag on grass to till.",
 		hovered: null,
+		player: { x: 0, y: 0 },
 	});
 
 	const target = owner ?? username;
 	const isOwner = target === username;
+	const [area, setArea] = useState<WorldArea>("Farm");
 	const {
 		market,
 		marketMessage,
@@ -88,12 +93,22 @@ export default function FarmMap() {
 	useEffect(() => {
 		if (!target) return;
 
-		emitVisitFarm(target, (res) => {
-			if (!res.ok) navigate("/dashboard", { replace: true });
-		});
+		const onFarm = area === "Farm";
+		// The farm snapshot feeds the HUD and `data-world-ready` even when the
+		// world boots into a hub, so join it first and only then decide whether
+		// the player should publish farm presence.
+		emitVisitFarm(
+			target,
+			(res) => {
+				if (!res.ok) navigate("/dashboard", { replace: true });
+			},
+			onFarm,
+		);
+		if (!onFarm) emitPauseFarmVisit();
+	}, [target, area, navigate]);
 
-		return () => emitLeaveFarm();
-	}, [target, navigate]);
+	// Unmounting the world must clear the active farm and presence.
+	useEffect(() => () => emitLeaveFarm(), []);
 
 	// Selecting a hotbar slot drives the farm hint (the hotbar is the single
 	// tool selector). The action itself reads the held item directly.
@@ -119,104 +134,73 @@ export default function FarmMap() {
 	// The visited farm may belong to someone else; the save is scoped by session.
 	useInventoryPersistence(inventoryHydrated, username);
 
-	const [area, setArea] = useState<WorldArea>("Farm");
 	const [travelPrompt, setTravelPrompt] = useState<string | null>(null);
-	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(null);
+	const [hubPeers, setHubPeers] = useState<string[]>([]);
+	const [farmPeers, setFarmPeers] = useState<string[]>([]);
+	const [casinoOverlay, setCasinoOverlay] = useState<CasinoOverlay | null>(
+		null,
+	);
 	const [bankDesk, setBankDesk] = useState<BankDesk | null>(null);
 	const livestock = useLivestockPurchase(isOwner, username);
 	const { select: selectAnimal, setMessage: setLivestockMessage } = livestock;
 	const [fishingOpen, setFishingOpen] = useState(false);
 	const [engineReady, setEngineReady] = useState(false);
+	const { houseOpen, openHouseMenu, closeHouseMenu } = useHouseMenu(sceneRef);
+	const {
+		status: npcStatus,
+		npcOpen,
+		npcMessage,
+		npcThanks,
+		npcBusy,
+		openNpc,
+		closeNpc,
+		acknowledgeIntro,
+		dismissThanks,
+		sell: sellToNpc,
+		buySeeds: buyNpcSeeds,
+	} = useNpcTrade(sceneRef, target, isOwner);
+	const { openFarmTravelMenu, openMarketplaceTravelMenu } = useWorldTravel({
+		target,
+		username,
+		sceneRef,
+		marketRef: marketSceneRef,
+		engineRef,
+	});
 
-	useEffect(() => {
-		const canvas = canvasRef.current;
-		if (!canvas || !target) return;
+	// Names only change on join/leave, so this does not re-render per frame.
+	useEffect(() => subscribeHubPeers(setHubPeers), []);
+	useEffect(() => subscribeFarmPeers(setFarmPeers), []);
 
-		let cancelled = false;
-		setEngineReady(false);
-		const engine = new ex.Engine({
-			canvasElement: canvas,
-			viewport: { width: MAP_WIDTH, height: MAP_HEIGHT },
-			resolution: { width: MAP_WIDTH, height: MAP_HEIGHT },
-			displayMode: ex.DisplayMode.FitContainer,
-			pixelArt: true,
-			suppressConsoleBootMessage: true,
-			backgroundColor: ex.Color.fromHex("#79a44d"),
-		});
-		setGameEngine(engine);
+	// The scenes leave the hub when they deactivate; this covers unmounts.
+	useEffect(() => () => leaveHub(), []);
 
-		const scene = new FarmMapScene(
-			target,
-			isOwner,
-			setTravelPrompt,
-			setArea,
-			() => {
-				scene.setOverlayPaused(true);
-				setFishingOpen(true);
-			},
-		);
-		scene.onFarmUpdate = (snapshot) => {
-			if (cancelled) return;
-			setHud(snapshot);
-			setEngineReady(true);
-		};
-		sceneRef.current = scene;
-		engine.addScene("farm-map", scene);
-		const marketplace = new MarketplaceScene(setTravelPrompt, setArea, (id) => {
-			marketplace.setPaused(true);
-			setMarketMessage(null);
-			setMarket(id);
-		});
-		marketSceneRef.current = marketplace;
-		engine.addScene("marketplace", marketplace);
-		const livestockScene = new LivestockMarketScene(setTravelPrompt, setArea, (id) => {
-			livestockScene.setPaused(true);
-			selectAnimal(id);
-			setLivestockMessage(null);
-		});
-		livestockRef.current = livestockScene;
-		engine.addScene("livestock-market", livestockScene);
-		const bank = new BankScene(setTravelPrompt, setArea, (desk) => {
-			bank.setPaused(true);
-			setBankDesk(desk);
-		});
-		bankRef.current = bank;
-		engine.addScene("bank", bank);
-		function openCasino(overlay: CasinoOverlay) {
-			casino.setPaused(true);
-			setCasinoOverlay(overlay);
-		}
-		const casino = new CasinoScene(
-			setTravelPrompt,
-			setArea,
-			() => openCasino("blackjack"),
-			() => openCasino("poker"),
-			() => openCasino("roulette"),
-			() => openCasino("slots"),
-		);
-		casinoRef.current = casino;
-		engine.addScene("casino", casino);
-		void Promise.all(worldResources.map((resource) => resource.load())).then(
-			async () => {
-				if (cancelled) return;
-				await engine.start();
-				if (cancelled) return;
-				await engine.goToScene("farm-map");
-			},
-		);
-
-		return () => {
-			cancelled = true;
-			sceneRef.current = null;
-			marketSceneRef.current = null;
-			casinoRef.current = null;
-			livestockRef.current = null;
-			bankRef.current = null;
-			setGameEngine(null);
-			engine.stop();
-			engine.dispose();
-		};
-	}, [target, isOwner, setMarket, setMarketMessage, selectAnimal, setLivestockMessage]);
+	useWorldEngine({
+		canvasRef,
+		engineRef,
+		sceneRef,
+		marketSceneRef,
+		casinoRef,
+		livestockRef,
+		bankRef,
+		target,
+		isOwner,
+		setTravelPrompt,
+		setArea,
+		setHud,
+		setEngineReady,
+		setMarket,
+		setMarketMessage,
+		selectAnimal,
+		setLivestockMessage,
+		setBankDesk,
+		setCasinoOverlay,
+		setFishingOpen,
+		openHouseMenu,
+		openNpcTrade: openNpc,
+		openFarmTravelMenu,
+		openMarketplaceTravelMenu,
+		onEngineChange: setGameEngine,
+	});
 
 	// Route farm hints and errors into the bottom-left feed.
 	useEffect(() => {
@@ -237,8 +221,9 @@ export default function FarmMap() {
 			setPaused(false);
 			setInventoryOpen(false);
 			setFishingOpen(false);
+			closeHouseMenu();
 		};
-	}, [setPaused, setInventoryOpen]);
+	}, [setPaused, setInventoryOpen, closeHouseMenu]);
 
 	function handleCloseMarket() {
 		closeMarket();
@@ -276,13 +261,25 @@ export default function FarmMap() {
 		<main
 			className="farm-map-page"
 			data-world-ready={worldReady ? "true" : "false"}
+			data-player-x={Math.round(hud.player.x)}
+			data-player-y={Math.round(hud.player.y)}
+			data-hub-peers={hubPeers.join(",")}
+			data-farm-peers={farmPeers.join(",")}
+			data-npc-stage={npcStatus?.stage ?? "none"}
+			data-sprinklers={(farm?.sprinklers ?? [])
+				.map((s) => `${s.x},${s.y}`)
+				.join(";")}
 		>
 			<canvas
 				ref={canvasRef}
 				className="farm-map-canvas"
 				aria-label={`${area} map. Use WASD or arrow keys to walk.`}
 			/>
-			<LightingOverlay engine={gameEngine} area={area} getGameCanvas={getGameCanvas} />
+			<LightingOverlay
+				engine={gameEngine}
+				area={area}
+				gameCanvasRef={canvasRef}
+			/>
 			{market && (
 				<MarketWindow
 					market={MARKETS[market]}
@@ -302,7 +299,9 @@ export default function FarmMap() {
 					onClose={closeLivestockPurchase}
 				/>
 			)}
-			{bankDesk && <BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />}
+			{bankDesk && (
+				<BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />
+			)}
 			{travelPrompt && (
 				<div
 					className={`farm-map-travel-prompt${travelPrompt.includes("closed") ? " farm-map-travel-prompt-closed" : ""}`}
@@ -311,16 +310,7 @@ export default function FarmMap() {
 					{travelPrompt}
 				</div>
 			)}
-			{area === "Farm" && (
-				<div className="farm-hud" data-testid="farm-hud">
-					<div className="farm-status">
-						<span data-testid="farm-tomatoes">🍅 {hud.tomatoes}</span>
-					</div>
-					<p className="farm-hint" data-testid="farm-hint">
-						{hud.message}
-					</p>
-				</div>
-			)}
+			{area === "Farm" && <FarmStatusHud hud={hud} />}
 			{!market && (!isOwner || inventoryHydrated) && (
 				<Hud tiles={farm?.tiles.length ?? 0} hovered={hud.hovered} />
 			)}
@@ -328,6 +318,24 @@ export default function FarmMap() {
 			<InventoryPanel />
 			<SleepVoteToast />
 			{paused && <PauseMenu />}
+			{houseOpen && isOwner && farm && (
+				<HouseMenu owner={target ?? ""} farm={farm} onClose={closeHouseMenu} />
+			)}
+			{npcOpen && npcStatus && (
+				<NpcTradeWindow
+					status={npcStatus}
+					barn={farm?.barn ?? {}}
+					message={npcMessage}
+					thanks={npcThanks}
+					busy={npcBusy}
+					onClose={closeNpc}
+					onAcknowledge={acknowledgeIntro}
+					onDismissThanks={dismissThanks}
+					onSell={sellToNpc}
+					onBuySeeds={buyNpcSeeds}
+				/>
+			)}
+			<TravelMenu />
 			{fishingOpen && <FishingOverlay onClose={closeFishing} />}
 			<CasinoOverlays open={casinoOverlay} onClose={closeCasinoOverlay} />
 		</main>

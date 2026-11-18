@@ -17,7 +17,12 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # The release bundles ERTS and its NIFs, so the binaries are built against
+    # the runner's glibc and must stay loadable on the deploy hosts (Debian 13,
+    # glibc 2.41). `ubuntu-latest` moved to 26.04, whose OTP build needs
+    # GLIBC_2.43 and dies at startup with `version 'GLIBC_2.43' not found`.
+    # Pin the newest image the hosts can run instead of tracking `latest`.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -64,4 +69,14 @@ jobs:
           rsync -az deploy/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/deploy.sh"
 
       - name: Restart
-        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" "APP_PORT=$APP_PORT APP_HOST=$DEPLOY_HOST bash $DEPLOY_PATH/deploy.sh"
+        env:
+          MAILTRAP_API_TOKEN: ${{ secrets.MAILTRAP_API_TOKEN }}
+          MAIL_FROM_EMAIL: ${{ secrets.MAIL_FROM_EMAIL }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "APP_PORT=$APP_PORT APP_HOST=$DEPLOY_HOST \
+             MAILTRAP_API_TOKEN='${MAILTRAP_API_TOKEN}' \
+             MAIL_FROM_EMAIL='${MAIL_FROM_EMAIL}' \
+             MAIL_FROM_NAME='${MAIL_FROM_NAME}' \
+             bash $DEPLOY_PATH/deploy.sh"

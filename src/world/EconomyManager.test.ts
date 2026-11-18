@@ -186,6 +186,32 @@ describe("EconomyManager", () => {
     });
   });
 
+  describe("admin", () => {
+    it("can afford anything and buys without spending", () => {
+      const manager = new EconomyManager(100);
+      const onChange = vi.fn();
+      manager.setOnChange(onChange);
+      manager.setAdmin(true);
+
+      expect(manager.isAdmin()).toBe(true);
+      expect(manager.canAfford(1_000_000)).toBe(true);
+      expect(manager.buy(1_000_000)).toEqual({ success: true, balance: 100 });
+      expect(manager.getBalance()).toBe(100);
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("still rejects non-finite costs and restores normal spending on logout", () => {
+      const manager = new EconomyManager(100);
+      manager.setAdmin(true);
+      expect(manager.buy(Number.POSITIVE_INFINITY).success).toBe(false);
+
+      manager.setAdmin(false);
+      expect(manager.isAdmin()).toBe(false);
+      expect(manager.canAfford(101)).toBe(false);
+      expect(manager.buy(101).error).toBe("Insufficient funds");
+    });
+  });
+
   describe("chips", () => {
     it("withdraws chips and reports the spend like a purchase", () => {
       const manager = new EconomyManager(100);

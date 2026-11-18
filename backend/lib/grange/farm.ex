@@ -11,6 +11,7 @@ defmodule Grange.Farm do
   @grid_size 15
   @grow_ms 10_000
   @harvest_yield 3
+  @till_decay_ms 20 * 60 * 1000
 
   @typedoc "The lifecycle state of a field tile."
   @type state :: :tilled | :planted | :watered | :ready
@@ -30,13 +31,27 @@ defmodule Grange.Farm do
   @spec grid_size() :: pos_integer()
   def grid_size, do: @grid_size
 
-  @doc "How long a watered tile takes to become ready, in milliseconds."
+  @doc """
+  How long a watered tile takes to become ready, in milliseconds.
+
+  Defaults to 10 seconds; dev/test runs may shorten it with the `:grow_ms`
+  app config so e2e specs do not sit through a full growth cycle.
+  """
   @spec grow_ms() :: pos_integer()
-  def grow_ms, do: @grow_ms
+  def grow_ms, do: Application.get_env(:grange, :grow_ms, @grow_ms)
 
   @doc "How many tomatoes a harvest yields."
   @spec harvest_yield() :: pos_integer()
   def harvest_yield, do: @harvest_yield
+
+  @doc """
+  How long bare tilled ground survives untended before reverting to grass.
+
+  A tile only counts down while it is in the `:tilled` state; planting or
+  watering moves it out of that state and a later harvest restarts the clock.
+  """
+  @spec till_decay_ms() :: pos_integer()
+  def till_decay_ms, do: @till_decay_ms
 
   @doc "True when `{x, y}` is an integer coordinate inside the field."
   @spec in_bounds?(integer(), integer()) :: boolean()
@@ -61,7 +76,7 @@ defmodule Grange.Farm do
 
   @doc "Waters a planted tile, scheduling when it becomes ready."
   @spec water(tile(), integer()) :: {:ok, tile()} | {:error, String.t()}
-  def water(%{state: :planted} = tile, now), do: water(tile, now, @grow_ms)
+  def water(%{state: :planted} = tile, now), do: water(tile, now, grow_ms())
   def water(_tile, _now), do: {:error, "tile is not planted"}
 
   @doc """

@@ -1,9 +1,23 @@
 import type { Vector } from "excalibur";
 import type { ActiveFarm } from "../../shared/types";
 import { emitFarmPropAction } from "../socket";
+import { useGameStore } from "../store";
 import type { FarmPropLayer } from "./farmPropLayer";
 import type { MovablePropKey } from "./mapData";
 import type { PropPlacement } from "./propPlacement";
+
+/**
+ * Owners may rearrange props on their own farm; admins may rearrange them on
+ * any farm (including farms they are visiting).
+ */
+export function mayMoveProps(isOwner: boolean, isAdmin: boolean): boolean {
+	return isOwner || isAdmin;
+}
+
+/** Scene-side wrapper that reads the signed-in account's admin flag. */
+export function canRearrangeProps(isOwner: boolean): boolean {
+	return mayMoveProps(isOwner, Boolean(useGameStore.getState().user?.is_admin));
+}
 
 /** Returns true when the click was handled as a prop pickup/placement. */
 export function handleFarmPropClick(item: string | null, pos: Vector,

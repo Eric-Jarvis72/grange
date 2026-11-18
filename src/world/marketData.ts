@@ -1,4 +1,5 @@
 import { CROPS, type CropId } from "../../shared/crops";
+import { ITEMS, type ItemId } from "../inventory/items";
 import {
 	FISH,
 	FISH_ORDER,
@@ -8,8 +9,8 @@ import {
 	type RodId,
 } from "./fishingData";
 
-/** The two enterable market stalls placed in the marketplace. */
-export type MarketId = "seed" | "produce";
+/** The market stalls placed in the marketplace. */
+export type MarketId = "seed" | "produce" | "hardware";
 
 /** A buy/sell tab shown inside a market window. */
 export type MarketCategoryId =
@@ -18,7 +19,10 @@ export type MarketCategoryId =
 	| "train"
 	| "sell"
 	| "fish"
-	| "rods";
+	| "rods"
+	| "supplies"
+	| "equipment"
+	| "build";
 
 /**
  * A good that can be traded at a market. Produce ids double as crop ids, and
@@ -34,6 +38,13 @@ export type MarketItemId =
 	| "midas_wheat"
 	| "frost_lettuce"
 	| "sunburst_tomato"
+	| "sprinkler"
+	| "hoe"
+	| "watering-can"
+	| "scythe"
+	| "shovel"
+	| "fence"
+	| "gate"
 	| FishId
 	| RodId;
 
@@ -41,6 +52,8 @@ export interface MarketItem {
 	id: MarketItemId;
 	name: string;
 	emoji: string;
+	/** Item art path; when set the shop shows it instead of the emoji. */
+	icon?: string;
 	/** "buy" spends grangecoin, "sell" earns it. */
 	kind: "buy" | "sell";
 	/** Grangecoin spent or earned per unit. */
@@ -102,6 +115,27 @@ function rodItem(id: RodId): MarketItem {
 	};
 }
 
+function toolItem(
+	id: MarketItemId,
+	emoji: string,
+	price: number,
+	blurb: string,
+): MarketItem {
+	// Reuse the existing item's name and icon so the shop shows the same art as
+	// the inventory and hotbar instead of a stand-in emoji.
+	const def = ITEMS[id as ItemId];
+	return {
+		id,
+		name: def.name,
+		emoji,
+		icon: def.icon,
+		kind: "buy",
+		price,
+		quantity: 1,
+		blurb: `$${price} · ${blurb}`,
+	};
+}
+
 export const MARKET_ITEMS = {
 	"tomato-seed": seedItem("tomato-seed", "tomato", "🌱"),
 	"wheat-seed": seedItem("wheat-seed", "wheat", "🌱"),
@@ -112,6 +146,13 @@ export const MARKET_ITEMS = {
 	midas_wheat: produceItem("midas_wheat", "midas_wheat", "🌟"),
 	frost_lettuce: produceItem("frost_lettuce", "frost_lettuce", "❄️"),
 	sunburst_tomato: produceItem("sunburst_tomato", "sunburst_tomato", "☀️"),
+	sprinkler: toolItem("sprinkler", "💧", 75, "Waters the four tiles around it."),
+	hoe: toolItem("hoe", "⛏️", 50, "Till soil for planting."),
+	"watering-can": toolItem("watering-can", "🚿", 60, "Water planted crops."),
+	scythe: toolItem("scythe", "🌾", 80, "Harvest sturdy crops."),
+	shovel: toolItem("shovel", "🧹", 40, "Dig up fences and objects."),
+	fence: toolItem("fence", "🪵", 5, "Click grass to place a fence post."),
+	gate: toolItem("gate", "🚪", 25, "Click grass to place a gate."),
 	...Object.fromEntries(FISH_ORDER.map((id) => [id, fishItem(id)])),
 	...Object.fromEntries(ROD_ORDER.map((id) => [id, rodItem(id)])),
 } as Record<MarketItemId, MarketItem>;
@@ -176,6 +217,27 @@ export const MARKET_CATEGORIES: Record<MarketCategoryId, MarketCategory> = {
 		items: [...ROD_ORDER],
 		slots: 8,
 	},
+	supplies: {
+		id: "supplies",
+		label: "Automation",
+		description: "Buy equipment to automate your fields.",
+		items: ["sprinkler"],
+		slots: 8,
+	},
+	equipment: {
+		id: "equipment",
+		label: "Tools",
+		description: "Tools for working the fields.",
+		items: ["hoe", "watering-can", "scythe", "shovel"],
+		slots: 8,
+	},
+	build: {
+		id: "build",
+		label: "Building",
+		description: "Fencing and gates for your farm.",
+		items: ["fence", "gate"],
+		slots: 8,
+	},
 };
 
 export interface MarketDefinition {
@@ -198,6 +260,12 @@ export const MARKETS: Record<MarketId, MarketDefinition> = {
 		title: "Produce Market",
 		categories: ["sell", "fish", "rods", "tools", "train"],
 		defaultCategory: "sell",
+	},
+	hardware: {
+		id: "hardware",
+		title: "Hardware Store",
+		categories: ["equipment", "build", "supplies"],
+		defaultCategory: "equipment",
 	},
 };
 

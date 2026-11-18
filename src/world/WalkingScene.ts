@@ -1,12 +1,43 @@
 import * as ex from "excalibur";
+import type { HubArea } from "../../shared/types";
+import {
+	isInventoryBlockingInput,
+	useInventoryStore,
+} from "../inventory/inventoryStore";
+import { useNotificationStore } from "../notifications/notificationStore";
+import { useGameStore } from "../store";
+import { BonkFx } from "./bonkFx";
+import { depthForY } from "./depth";
 import { addFarmerGraphics, updateFarmerGraphics } from "./farmerSprite";
+import { FrameClock } from "./frameClock";
+import {
+	getHubPeers,
+	joinHub,
+	leaveHub,
+	publishHubPosition,
+} from "./hubClient";
+import { HubPlayers } from "./hubPlayers";
 import { InputManager } from "./InputManager";
+import { MAX_INTERACTION_DISTANCE } from "./interaction";
 import { MAP_HEIGHT, MAP_WIDTH } from "./mapData";
 import { updateWalkingPlayer } from "./playerMovement";
 import type { WalkObstacle } from "./walkCollisions";
+import { cameraAxis } from "./viewport";
+import { publishViewTransform } from "./viewTransform";
+import { ensureSceneResources } from "./worldAssets";
 
-export type WorldArea = "Farm" | "Marketplace" | "Casino" | "Livestock Market" | "Bank";
-export type WorldSceneName = "farm-map" | "marketplace" | "casino" | "livestock-market" | "bank";
+export type WorldArea =
+	| "Farm"
+	| "Marketplace"
+	| "Casino"
+	| "Livestock Market"
+	| "Bank";
+export type WorldSceneName =
+	| "farm-map"
+	| "marketplace"
+	| "casino"
+	| "livestock-market"
+	| "bank";
 
 export interface SceneSpawn {
 	x: number;
@@ -16,6 +47,8 @@ export interface SceneSpawn {
 export interface SceneInteraction {
 	position: ex.Vector;
 	prompt: string;
+	/** How close the player must stand for the prompt to show. Defaults to
+	 * MAX_INTERACTION_DISTANCE; large objects may declare a wider reach. */
 	radius?: number;
 	/** Controls whether the prompt shows; omit to always allow. */
 	canInteract?: () => boolean;
@@ -42,9 +75,16 @@ interface WalkingSceneOptions {
 	spawn: ex.Vector;
 	interactions: SceneInteraction[];
 	obstacles: WalkObstacle[];
+	/** Shared hub areas show other players; leave unset for private scenes. */
+	hubArea?: HubArea | null;
 	onAreaChange: (area: WorldArea) => void;
 	onPromptChange: (prompt: string | null) => void;
+	/** Right edge of the walkable world; omit for the default map width. */
 	worldWidth?: number;
+	/** Top edge and bottom edge of the walkable world. */
+	worldMinX?: number;
+	worldHeight?: number;
+	worldMinY?: number;
 }
 
 export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
@@ -53,7 +93,23 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 	private activePrompt: string | null = null;
 	private traveling = false;
 	private paused = false;
+	private hubPlayers?: HubPlayers;
+	private bonkFx?: BonkFx;
 	private readonly playerSpeed = 160;
+	/** Wall-clock gameplay step; see `frameClock.ts`. */
+	protected readonly frameClock = new FrameClock();
+
+	/** A shovel click on another hub player is a cosmetic bonk. */
+	private readonly handleHubClick = (evt: ex.PointerEvent): void => {
+		if (this.paused || this.traveling || isInventoryBlockingInput()) return;
+		const inventory = useInventoryStore.getState();
+		if (inventory.hotbar[inventory.selectedHotbar]?.itemId !== "shovel") return;
+		const target = this.hubPlayers?.bonkAt(evt.worldPos.x, evt.worldPos.y);
+		if (!target) return;
+		this.bonkFx?.play(target.x, target.y - 40);
+		this.camera.shake(3, 3, 140);
+		useNotificationStore.getState().push("BONK!", "system");
+	};
 
 	constructor(private readonly options: WalkingSceneOptions) {
 		super();
@@ -65,10 +121,16 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 			width: 32,
 			height: 32,
 			anchor: ex.vec(0.5, 1),
-			z: 200,
+			z: depthForY(this.options.spawn.y),
 		});
 		addFarmerGraphics(this.player);
 		this.add(this.player);
+		if (this.options.hubArea) {
+			const username = useGameStore.getState().username;
+			this.hubPlayers = new HubPlayers(this, this.player, username || "Farmer");
+			this.bonkFx = new BonkFx(this);
+			this.input.pointers.primary.on("down", this.handleHubClick);
+		}
 		this.camera.pos = ex.vec(MAP_WIDTH / 2, MAP_HEIGHT / 2);
 	}
 
@@ -82,8 +144,14 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		this.inputManager = new InputManager();
 		this.traveling = false;
 		this.paused = false;
+		this.frameClock.reset();
 		this.options.onAreaChange(this.options.area);
 		this.setPrompt(null);
+		if (this.options.hubArea) {
+			joinHub(this.options.hubArea);
+			this.hubPlayers?.sync(getHubPeers());
+			publishHubPosition(this.player.pos.x, this.player.pos.y);
+		}
 	}
 
 	/** Freezes movement and input while a DOM overlay owns the screen. */
@@ -100,7 +168,39 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		}
 	}
 
-	override onPreUpdate(engine: ex.Engine, delta: number): void {
+	/** Syncs and eases remote avatars; subclasses may call it before returning. */
+	protected updateHub(delta: number): void {
+		this.hubPlayers?.sync(getHubPeers());
+		this.hubPlayers?.update(delta);
+	}
+
+	override onPreUpdate(engine: ex.Engine, _delta: number): void {
+		this.walkFrame(engine, this.frameClock.step());
+	}
+
+	/**
+	 * Applies the scene's viewport defaults. Indoor and outdoor scenes keep
+	 * the original 1:1 camera pacing so walking and train animations run at
+	 * the same speed as before; any side gutter uses the scene's backdrop
+	 * tone instead of the shared grass green.
+	 */
+	protected applyViewport(engine: ex.Engine): void {
+		if (this.backgroundColor) engine.backgroundColor = this.backgroundColor;
+		this.camera.zoom = 1;
+	}
+
+	/**
+	 * Runs one walking frame with a wall-clock step. Split out so a subclass
+	 * that also animates something (the marketplace train) can take a single
+	 * step for the frame instead of advancing each concern separately.
+	 */
+	protected walkFrame(engine: ex.Engine, step: number): void {
+		this.applyViewport(engine);
+		publishViewTransform(engine, this.camera);
+		// Other players keep moving while a DOM overlay pauses the local player.
+		this.updateHub(step);
+		this.bonkFx?.update(step);
+
 		if (!this.inputManager || this.paused) return;
 		// Freeze the player while a travel animation (the train leaving) plays.
 		if (this.traveling) {
@@ -113,20 +213,33 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 			this.player,
 			direction,
 			this.playerSpeed,
-			delta,
+			step,
 			this.options.obstacles,
 			this.options.worldWidth,
+			this.options.worldHeight,
+			this.options.worldMinX,
+			this.options.worldMinY,
 		);
-		if (this.options.worldWidth && this.options.worldWidth > MAP_WIDTH)
-			this.camera.pos = ex.vec(ex.clamp(this.player.pos.x, MAP_WIDTH / 2,
-				this.options.worldWidth - MAP_WIDTH / 2), MAP_HEIGHT / 2);
+		if (this.options.worldWidth) {
+			const minX = this.options.worldMinX ?? 0;
+			const minY = this.options.worldMinY ?? 0;
+			const worldWidth = this.options.worldWidth;
+			const worldHeight = this.options.worldHeight ?? MAP_HEIGHT;
+			this.camera.pos = ex.vec(
+				cameraAxis(this.player.pos.x, engine.halfDrawWidth, minX, worldWidth),
+				cameraAxis(this.player.pos.y, engine.halfDrawHeight, minY, worldHeight),
+			);
+		}
 		updateFarmerGraphics(this.player, direction);
+		if (this.options.hubArea) {
+			publishHubPosition(this.player.pos.x, this.player.pos.y);
+		}
 
 		const interaction = this.options.interactions.find(
 			(candidate) =>
 				(candidate.canInteract?.() ?? true) &&
 				this.player.pos.distance(candidate.position) <=
-					(candidate.radius ?? 115),
+					(candidate.radius ?? MAX_INTERACTION_DISTANCE),
 		);
 		this.setPrompt(interaction?.prompt ?? null);
 		if (interaction && this.inputManager.consumePress("KeyE", "Enter")) {
@@ -146,8 +259,15 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		engine: ex.Engine,
 		interaction: SceneInteraction,
 	): Promise<void> {
+		if (!interaction.destination) {
+			if (interaction.onTravel) await interaction.onTravel();
+			return;
+		}
+		// Warm the destination while the departure animation plays, so a fast
+		// player never lands in a scene whose art has not loaded yet.
+		const assets = ensureSceneResources(interaction.destination);
 		if (interaction.onTravel) await interaction.onTravel();
-		if (!interaction.destination) return;
+		await assets;
 		await engine.goToScene(interaction.destination, {
 			sceneActivationData: {
 				spawn: interaction.destinationSpawn,
@@ -161,6 +281,9 @@ export abstract class WalkingScene extends ex.Scene<SceneActivationData> {
 		this.inputManager?.destroy();
 		this.inputManager = undefined;
 		this.setPrompt(null);
+		this.hubPlayers?.clear();
+		this.bonkFx?.clear();
+		if (this.options.hubArea) leaveHub();
 	}
 
 	private setPrompt(prompt: string | null): void {

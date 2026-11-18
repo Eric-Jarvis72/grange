@@ -27,7 +27,7 @@ defmodule Grange.LivestockMarketTest do
              LivestockMarket.buy(user.id, user.username, "hen")
 
     assert FarmStore.view(user.username).animals == %{"hen" => 2}
-    assert {:ok, stored} = Accounts.authenticate(user.username, "harvest-please")
+    stored = Accounts.find_by_id(user.id)
     assert stored.balance == 50
   end
 
@@ -44,7 +44,7 @@ defmodule Grange.LivestockMarketTest do
              LivestockMarket.buy(user.id, "SomeoneElse", "hen")
 
     assert FarmStore.view(user.username).animals == %{}
-    assert {:ok, stored} = Accounts.authenticate(user.username, "harvest-please")
+    stored = Accounts.find_by_id(user.id)
     assert stored.balance == 100
   end
 end

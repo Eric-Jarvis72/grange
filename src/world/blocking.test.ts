@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { fenceBlockedTiles } from "./fenceData";
 import {
 	BlockRegistry,
 	decorByTile,
@@ -134,16 +133,14 @@ describe("initial prop blocking", () => {
 				);
 			}
 		});
-		blocks.add("field-fence", fenceBlockedTiles([]));
+		blocks.add("field-fence", []);
 		return blocks;
 	}
 
-	it("starts without fence-blocked tiles, then blocks placed posts", () => {
+	it("does not block a farming tile merely because a fence post is on its corner", () => {
 		const blocks = seedRegistry();
 		expect(blocks.isBlocked(8, 7)).toBe(false);
-		blocks.add("field-fence", fenceBlockedTiles([{ x: 8, y: 7 }]));
-		expect(blocks.isBlocked(8, 7)).toBe(true);
-		blocks.add("field-fence", fenceBlockedTiles([]));
+		blocks.add("field-fence", []);
 		expect(blocks.isBlocked(8, 7)).toBe(false);
 	});
 

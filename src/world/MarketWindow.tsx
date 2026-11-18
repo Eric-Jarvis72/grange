@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Hotbar } from "../inventory/Hotbar";
+import { HardwareStall } from "./HardwareStall";
 import type { MarketDefinition, MarketId, MarketItemId } from "./marketData";
 import { ProduceStall } from "./ProduceStall";
 import { SeedStall } from "./SeedStall";
@@ -26,13 +27,13 @@ interface MarketWindowProps {
 const STALL_TITLES: Record<MarketId, string> = {
 	seed: "GRANGE MARKET - SEED STALL",
 	produce: "GRANGE MARKET - PRODUCE STALL",
+	hardware: "Hardware Store",
 };
 
 /**
- * The pixel-art Grange Market modal. Two stalls share one frame: the Seed Stall
- * buys seeds (with the player's inventory beside it) and the Produce Stall sells
- * barn crops. `Escape` closes, `Tab` switches stalls, and the numeric hotbar
- * stays docked at the bottom.
+ * The pixel-art Grange Market modal. Seed and produce share one frame with a
+ * stall switcher; the hardware store opens into its own Tools/Building/
+ * Automation stall. `Escape` closes and the numeric hotbar stays docked below.
  */
 export function MarketWindow({
 	market,
@@ -42,6 +43,7 @@ export function MarketWindow({
 }: MarketWindowProps) {
 	const [stall, setStall] = useState<MarketId>(market.id);
 	const balance = useEconomyBalance();
+	const isHardware = market.id === "hardware";
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
@@ -52,7 +54,7 @@ export function MarketWindow({
 				onClose();
 				return;
 			}
-			if (event.code === "Tab") {
+			if (!isHardware && event.code === "Tab") {
 				event.preventDefault();
 				event.stopImmediatePropagation();
 				setStall((current) => (current === "seed" ? "produce" : "seed"));
@@ -60,7 +62,7 @@ export function MarketWindow({
 		}
 		window.addEventListener("keydown", onKeyDown, true);
 		return () => window.removeEventListener("keydown", onKeyDown, true);
-	}, [onClose]);
+	}, [onClose, isHardware]);
 
 	return (
 		<div className="market-overlay">
@@ -75,28 +77,34 @@ export function MarketWindow({
 					<h2 className="market-title" data-testid="market-title">
 						{STALL_TITLES[stall]}
 					</h2>
-					<div className="market-stall-tabs" role="tablist" aria-label="Stalls">
-						<button
-							type="button"
-							role="tab"
-							aria-selected={stall === "seed"}
-							className={`market-stall-tab${stall === "seed" ? " market-stall-tab-active" : ""}`}
-							data-testid="market-stall-seed"
-							onClick={() => setStall("seed")}
+					{!isHardware && (
+						<div
+							className="market-stall-tabs"
+							role="tablist"
+							aria-label="Stalls"
 						>
-							Seed Stall (Buy)
-						</button>
-						<button
-							type="button"
-							role="tab"
-							aria-selected={stall === "produce"}
-							className={`market-stall-tab${stall === "produce" ? " market-stall-tab-active" : ""}`}
-							data-testid="market-stall-produce"
-							onClick={() => setStall("produce")}
-						>
-							Produce Stall (Sell)
-						</button>
-					</div>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={stall === "seed"}
+								className={`market-stall-tab${stall === "seed" ? " market-stall-tab-active" : ""}`}
+								data-testid="market-stall-seed"
+								onClick={() => setStall("seed")}
+							>
+								Seed Stall (Buy)
+							</button>
+							<button
+								type="button"
+								role="tab"
+								aria-selected={stall === "produce"}
+								className={`market-stall-tab${stall === "produce" ? " market-stall-tab-active" : ""}`}
+								data-testid="market-stall-produce"
+								onClick={() => setStall("produce")}
+							>
+								Produce Stall (Sell)
+							</button>
+						</div>
+					)}
 					<span className="market-balance" data-testid="farm-balance">
 						<span className="market-coin" aria-hidden="true">
 							🪙
@@ -115,7 +123,9 @@ export function MarketWindow({
 				</header>
 
 				<div className="market-body">
-					{stall === "seed" ? (
+					{isHardware ? (
+						<HardwareStall controls={controls} />
+					) : stall === "seed" ? (
 						<SeedStall controls={controls} balance={balance} />
 					) : (
 						<ProduceStall controls={controls} />

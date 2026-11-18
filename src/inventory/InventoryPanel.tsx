@@ -22,7 +22,7 @@ export function InventoryPanel() {
 			className="inv-backdrop"
 			onClick={onBackdropClick}
 		>
-			<div className="inv-modal">
+			<div className="inv-modal inv-modal-wide">
 				<header className="inv-header">
 					<h2>Inventory</h2>
 					<button

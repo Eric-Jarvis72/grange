@@ -6,7 +6,7 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": ["src/**", "shared/**"]
+		"includes": ["src/**", "shared/**", "e2e/**"]
 	},
 	"css": {
 		"parser": {

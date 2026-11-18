@@ -1,7 +1,7 @@
 defmodule Grange.LivestockMarket do
   @moduledoc "Purchases livestock with account funds and saves it to the owner's farm."
 
-  alias Grange.{FarmRecord, FarmStore, Repo, User}
+  alias Grange.{FarmAnimals, FarmRecord, FarmStore, Repo, User}
 
   @prices %{"hen" => 25, "pig" => 55, "sheep" => 70, "cow" => 120}
   @max_owned 99
@@ -38,10 +38,17 @@ defmodule Grange.LivestockMarket do
     owned = Map.get(farm.animals, animal, 0)
 
     cond do
-      user.username != owner -> Repo.rollback("not your farm")
-      owned >= @max_owned -> Repo.rollback("animal inventory is full")
-      user.balance < price -> Repo.rollback("insufficient funds")
-      true -> save_purchase(user, farm, animal, price, owned)
+      user.username != owner ->
+        Repo.rollback("not your farm")
+
+      owned + FarmAnimals.count(owner, animal) >= @max_owned ->
+        Repo.rollback("animal inventory is full")
+
+      user.balance < price ->
+        Repo.rollback("insufficient funds")
+
+      true ->
+        save_purchase(user, farm, animal, price, owned)
     end
   end
 

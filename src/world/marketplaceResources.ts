@@ -8,6 +8,7 @@ export const marketplaceImages: Record<MarketplacePropKey, ex.ImageSource> = {
 	"game-hall": image("marketplace/buildings/game-hall.webp"),
 	"livestock-pavilion": image("marketplace/livestock/pavilion.webp"),
 	"village-bank": image("marketplace/bank/exterior.webp"),
+	"hardware-store": image("marketplace/buildings/hardware-store.webp"),
 	"seed-display": image("marketplace/objects/seed-display.webp"),
 	"produce-cart": image("marketplace/objects/produce-cart.webp"),
 	"notice-board": image("marketplace/objects/notice-board.webp"),

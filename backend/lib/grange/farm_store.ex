@@ -17,9 +17,12 @@ defmodule Grange.FarmStore do
   alias Grange.{
     Barn,
     BarnItem,
+    BarnStorage,
     Crops,
     Farm,
     FarmAction,
+    FarmAnimal,
+    FarmAnimals,
     FarmBootstrap,
     FarmFence,
     FarmFences,
@@ -28,7 +31,12 @@ defmodule Grange.FarmStore do
     FarmProp,
     FarmProps,
     FarmRecord,
+    FarmSettings,
+    FarmSprinkler,
+    FarmSprinklers,
+    FarmTick,
     FarmView,
+    FieldWater,
     Inventory,
     InventoryItem,
     InventorySlot,
@@ -39,8 +47,6 @@ defmodule Grange.FarmStore do
   }
 
   @lobby_topic "lobby"
-  @orthogonal [{0, -1}, {0, 1}, {1, 0}, {-1, 0}]
-  @growing [:planted, :watered, :ready]
 
   @spec ensure(String.t()) :: map()
   def ensure(owner) do
@@ -74,10 +80,16 @@ defmodule Grange.FarmStore do
           fence_count: farm.fence_count,
           gates: FarmGates.list(owner),
           gate_count: farm.gate_count,
+          sprinklers: FarmSprinklers.list(owner),
+          sprinkler_count: farm.sprinkler_count,
           animals: farm.animals,
+          placed_animals: FarmAnimals.list(owner),
           land_level: farm.land_level,
+          is_public: farm.is_public,
+          visitor_edit: farm.visitor_edit,
           prop_overrides: FarmProps.overrides(owner),
           prop_inventory: FarmProps.inventory(owner),
+          storage: BarnStorage.inventory(farm),
           time: time,
           cycle_time_ms: time.cycle_time_ms,
           day_phase: time.phase
@@ -92,10 +104,35 @@ defmodule Grange.FarmStore do
   end
 
   @spec action(String.t(), map()) :: {:ok, map()} | {:error, String.t()}
-  def action(owner, action) do
+  def action(owner, action), do: action(owner, action, owner)
+
+  @doc """
+  Runs an action on `owner`'s farm on behalf of `actor`.
+
+  Owners and visitors with edit permission share the same farm state, but seed
+  spending and mutation drops follow the actor so a visitor cannot consume the
+  owner's seed ledger.
+  """
+  @spec action(String.t(), map(), String.t()) :: {:ok, map()} | {:error, String.t()}
+  def action(owner, action, actor) when is_binary(actor) do
     case normalize(action) do
-      {:ok, kind, x, y, opts} -> run(owner, kind, x, y, opts)
+      {:ok, kind, x, y, opts} -> run(owner, actor, kind, x, y, opts)
       :error -> {:error, "invalid action"}
+    end
+  end
+
+  def action(_owner, _action, _actor), do: {:error, "invalid action"}
+
+  @doc "Whether a visitor may edit the farm right now."
+  @spec edit_allowed?(String.t()) :: boolean()
+  def edit_allowed?(owner), do: FarmSettings.edit_allowed?(owner)
+
+  @doc "Updates whether a farm is public and whether visitors may edit it."
+  @spec update_settings(String.t(), map()) :: {:ok, map()} | {:error, String.t()}
+  def update_settings(owner, attrs) do
+    case FarmSettings.update(owner, attrs) do
+      {:ok, _farm} -> refresh(owner)
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -120,15 +157,7 @@ defmodule Grange.FarmStore do
 
   @spec tick(integer()) :: [String.t()]
   def tick(now \\ System.system_time(:millisecond)) do
-    ready =
-      Repo.all(
-        from(t in Tile,
-          where: t.state == :watered and not is_nil(t.ready_at) and t.ready_at <= ^now
-        )
-      )
-
-    owners = ready |> Enum.map(& &1.owner) |> Enum.uniq() |> Enum.sort()
-    Enum.each(ready, &Repo.update!(Ecto.Changeset.change(&1, state: :ready)))
+    owners = FarmTick.run(now)
     Enum.each(owners, &broadcast_farm/1)
     if owners != [], do: broadcast_lobby()
     owners
@@ -145,7 +174,10 @@ defmodule Grange.FarmStore do
       InventorySlot,
       FarmFence,
       FarmGate,
+      FarmSprinkler,
       FarmProp,
+      Grange.NpcQuestRecord,
+      FarmAnimal,
       FarmRecord
     ]
     |> Enum.each(&Repo.delete_all/1)
@@ -153,13 +185,13 @@ defmodule Grange.FarmStore do
     :ok
   end
 
-  defp run(owner, kind, x, y, opts) do
+  defp run(owner, actor, kind, x, y, opts) do
     with :ok <- Land.check(owner, kind, x, y, true),
-         do: apply_action(owner, kind, x, y, opts)
+         do: apply_action(owner, actor, kind, x, y, opts)
   end
 
-  defp apply_action(owner, kind, x, y, opts) do
-    case Repo.transaction(fn -> mutate_or_rollback(owner, kind, x, y, opts) end) do
+  defp apply_action(owner, actor, kind, x, y, opts) do
+    case Repo.transaction(fn -> mutate_or_rollback(owner, actor, kind, x, y, opts) end) do
       {:ok, {:drops, drops}} ->
         broadcast_change(owner)
         {:ok, Map.put(view(owner), :drops, drops)}
@@ -175,17 +207,15 @@ defmodule Grange.FarmStore do
     end
   end
 
-  defp mutate_or_rollback(owner, kind, x, y, opts) do
-    case mutate(owner, kind, x, y, opts) do
-      {:error, reason} -> Repo.rollback(reason)
-      result -> result
-    end
+  defp mutate_or_rollback(owner, actor, kind, x, y, opts) do
+    with {:error, reason} <- mutate(owner, actor, kind, x, y, opts),
+         do: Repo.rollback(reason)
   end
 
-  defp mutate(owner, :till, x, y, _opts) do
+  defp mutate(owner, _actor, :till, x, y, _opts) do
     case tile_at(owner, x, y) do
       nil ->
-        %Tile{}
+        %Tile{tilled_at: now_ms()}
         |> Tile.changeset(%{owner: owner, x: x, y: y, state: :tilled, crop: "tomato"})
         |> Repo.insert!()
 
@@ -196,49 +226,52 @@ defmodule Grange.FarmStore do
     end
   end
 
-  defp mutate(owner, :place_fence, x, y, _opts),
+  defp mutate(owner, _actor, :place_fence, x, y, _opts),
     do: reorient_gates(owner, FarmFences.place(owner, x, y))
 
-  defp mutate(owner, :remove_fence, x, y, _opts),
+  defp mutate(owner, _actor, :remove_fence, x, y, _opts),
     do: reorient_gates(owner, FarmFences.remove(owner, x, y))
 
-  defp mutate(owner, :place_gate, x, y, _opts),
+  defp mutate(owner, _actor, :place_gate, x, y, _opts),
     do: reorient_gates(owner, FarmGates.place(owner, x, y))
 
-  defp mutate(owner, :remove_gate, x, y, _opts),
+  defp mutate(owner, _actor, :remove_gate, x, y, _opts),
     do: reorient_gates(owner, FarmGates.remove(owner, x, y))
 
-  defp mutate(owner, kind, x, y, opts) do
+  defp mutate(owner, _actor, :place_animal, x, y, opts),
+    do: FarmAnimals.place(owner, opts[:animal], x, y)
+
+  defp mutate(owner, _actor, :remove_animal, x, y, _opts),
+    do: FarmAnimals.pickup(owner, x, y)
+
+  defp mutate(owner, _actor, kind, x, y, _opts)
+       when kind in [:place_sprinkler, :remove_sprinkler],
+       do: FarmSprinklers.action(owner, kind, x, y)
+
+  defp mutate(owner, actor, kind, x, y, opts) do
     case tile_at(owner, x, y) do
       nil -> {:error, "no tilled tile here"}
-      tile -> transform(owner, tile, kind, opts)
+      tile -> transform(owner, actor, tile, kind, opts)
     end
   end
 
-  defp reorient_gates(owner, :ok), do: FarmGates.reorient(owner)
-  defp reorient_gates(_owner, error), do: error
+  defp reorient_gates(owner, result), do: with(:ok <- result, do: FarmGates.reorient(owner))
 
-  defp transform(owner, tile, :plant, opts) do
+  defp transform(_owner, actor, tile, :plant, opts) do
     crop = opts[:crop] || "tomato"
     total = Crops.get(crop)[:harvests] || 1
     seed = Inventory.seed_item(crop)
 
-    with :ok <- Inventory.take(owner, seed, 1),
+    with :ok <- Inventory.take(actor, seed, 1),
          {:ok, planted} <- Farm.plant(tile, now_ms()) do
       update_tile(tile, %{planted | crop: Crops.encode_crop(crop, total)})
     end
   end
 
-  defp transform(owner, tile, :water, _opts) do
-    {crop_id, _remaining} = Crops.parse_crop(tile.crop)
-    speed = Crops.growth_speed_multiplier(crop_id, neighbor_families(owner, tile.x, tile.y))
+  defp transform(owner, _actor, tile, :water, _opts),
+    do: FieldWater.water(owner, tile, now_ms())
 
-    with {:ok, watered} <- Farm.water(tile, now_ms(), Farm.grow_ms() / speed) do
-      update_tile(tile, watered)
-    end
-  end
-
-  defp transform(owner, tile, :harvest, opts) do
+  defp transform(owner, actor, tile, :harvest, opts) do
     {crop_id, remaining} = Crops.parse_crop(tile.crop)
 
     cond do
@@ -247,9 +280,9 @@ defmodule Grange.FarmStore do
 
       Crops.can_harvest?(crop_id, opts[:tool]) ->
         Barn.add(owner, crop_id, 1)
-        families = neighbor_families(owner, tile.x, tile.y)
+        families = FieldWater.neighbor_families(owner, tile.x, tile.y)
         drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
-        Enum.each(drops, &Inventory.add(owner, &1, 1))
+        Enum.each(drops, &Inventory.add(actor, &1, 1))
         regrow_or_clear(owner, tile, crop_id, remaining)
         {:drops, drops}
 
@@ -262,7 +295,12 @@ defmodule Grange.FarmStore do
     crop_def = Crops.get(crop_id)
 
     if remaining > 1 and crop_def[:regrow_stage] >= 0 do
-      speed = Crops.growth_speed_multiplier(crop_id, neighbor_families(owner, tile.x, tile.y))
+      speed =
+        Crops.growth_speed_multiplier(
+          crop_id,
+          FieldWater.neighbor_families(owner, tile.x, tile.y)
+        )
+
       now = now_ms()
 
       tile
@@ -270,7 +308,8 @@ defmodule Grange.FarmStore do
         state: :watered,
         crop: Crops.encode_crop(crop_id, remaining - 1),
         watered_at: now,
-        ready_at: now + round(Farm.grow_ms() / speed)
+        ready_at: now + round(Farm.grow_ms() / speed),
+        tilled_at: nil
       })
       |> Repo.update!()
 
@@ -290,36 +329,16 @@ defmodule Grange.FarmStore do
       crop: changed.crop,
       planted_at: changed.planted_at,
       watered_at: changed.watered_at,
-      ready_at: changed.ready_at
+      ready_at: changed.ready_at,
+      tilled_at: if(changed.state == :tilled, do: now_ms(), else: nil)
     })
     |> Repo.update!()
 
     :ok
   end
 
-  defp neighbor_families(owner, x, y) do
-    for {dx, dy} <- @orthogonal,
-        tile = tile_at(owner, x + dx, y + dy),
-        tile != nil,
-        tile.state in @growing do
-      {crop_id, _remaining} = Crops.parse_crop(tile.crop)
-      Crops.family(crop_id)
-    end
-  end
-
-  @kinds %{
-    "till" => :till,
-    "plant" => :plant,
-    "water" => :water,
-    "harvest" => :harvest,
-    "place_fence" => :place_fence,
-    "remove_fence" => :remove_fence,
-    "place_gate" => :place_gate,
-    "remove_gate" => :remove_gate
-  }
-
   defp normalize(action) when is_map(action) do
-    kind = Map.get(@kinds, to_string(fetch(action, "kind")))
+    kind = FarmAction.kind(fetch(action, "kind"))
     x = to_integer(fetch(action, "x"))
     y = to_integer(fetch(action, "y"))
 
@@ -353,9 +372,8 @@ defmodule Grange.FarmStore do
     broadcast_lobby()
   end
 
-  defp broadcast_farm(owner) do
-    GrangeWeb.Endpoint.broadcast("farm:" <> owner, "farmUpdate", %{farm: view(owner)})
-  end
+  defp broadcast_farm(owner),
+    do: GrangeWeb.Endpoint.broadcast("farm:" <> owner, "farmUpdate", %{farm: view(owner)})
 
   defp broadcast_lobby do
     GrangeWeb.Endpoint.broadcast(@lobby_topic, "farms", %{farms: summaries()})

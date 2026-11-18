@@ -1,8 +1,14 @@
 import * as ex from "excalibur";
 import type { InputVector } from "./InputManager";
+import { depthForY } from "./depth";
+import { MAX_FRAME_STEP_MS } from "./frameClock";
+import { LandBorderHint } from "./landBorder";
 import { farmBounds, MAP_HEIGHT, MAP_WIDTH, TILE_SIZE } from "./mapData";
 import { farmWalkObstacles } from "./sceneObstacles";
+import { WALK_SPEED_MULTIPLIER } from "./testMode";
 import { moveAroundObstacles, type WalkObstacle } from "./walkCollisions";
+
+export { LandBorderHint };
 
 /** Farm movement uses the same speed as the other walking scenes. */
 export function updateFarmPlayer(
@@ -11,6 +17,7 @@ export function updateFarmPlayer(
 	delta: number,
 	speedMultiplier = 1,
 	landLevel = 0,
+	landHint?: LandBorderHint,
 ): void {
 	const bounds = farmBounds(landLevel);
 	updateWalkingPlayer(
@@ -24,6 +31,7 @@ export function updateFarmPlayer(
 		bounds.minColumn * TILE_SIZE,
 		bounds.minRow * TILE_SIZE,
 	);
+	landHint?.update(direction, player.pos, landLevel);
 }
 
 export function updateWalkingPlayer(
@@ -37,7 +45,7 @@ export function updateWalkingPlayer(
 	worldMinX = 0,
 	worldMinY = 0,
 ): void {
-	const step = (speed * Math.min(delta, 100)) / 1000;
+	const step = (speed * WALK_SPEED_MULTIPLIER * Math.min(delta, MAX_FRAME_STEP_MS)) / 1000;
 	const next = moveAroundObstacles(
 		player.pos.x,
 		player.pos.y,
@@ -48,5 +56,5 @@ export function updateWalkingPlayer(
 	player.vel = ex.Vector.Zero;
 	player.pos.x = ex.clamp(next.x, worldMinX + 16, worldWidth - 16);
 	player.pos.y = ex.clamp(next.y, worldMinY + 32, worldHeight - 16);
-	player.z = 100 + Math.floor(player.pos.y);
+	player.z = depthForY(player.pos.y);
 }

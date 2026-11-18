@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { countItem, useInventoryStore } from "../inventory/inventoryStore";
 import type { ItemId } from "../inventory/items";
-import { emitAddItem, emitRemoveItem, emitSellProduce } from "../socket";
+import { emitAddItem, emitRemoveItem } from "../socket";
 import { useGameStore } from "../store";
+import { emitSellProduce } from "./barnSocket";
 import { economy } from "./EconomyManager";
 import { type FishId, isFishId, isRodId, RODS } from "./fishingData";
 import { useFishingStore } from "./fishingStore";
 import type { MarketItemControl } from "./MarketWindow";
 import { MARKET_ITEMS, type MarketId, type MarketItemId } from "./marketData";
 import { seedPurchaseCap } from "./seedPurchase";
+import { orderSeeds } from "./seedShop";
 import { useEconomyBalance } from "./useEconomy";
 
 /** Market seed id -> the inventory item it grants. */
@@ -17,6 +19,10 @@ const SEED_ITEMS: Record<string, ItemId> = {
 	"wheat-seed": "wheat-seed",
 	"lettuce-seed": "lettuce-seed",
 };
+
+/** Hardware tools are one-off purchases; the rest restock the farm's supply. */
+const HARDWARE_TOOLS: ItemId[] = ["hoe", "watering-can", "scythe", "shovel"];
+const HARDWARE_STOCK: ItemId[] = ["fence", "gate", "sprinkler"];
 
 /**
  * Market overlay state and controls for a farm visit. Seeds and produce follow
@@ -49,9 +55,35 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 
 	async function buySeed(id: MarketItemId, quantity: number) {
 		const item = MARKET_ITEMS[id];
-		if (!SEED_ITEMS[id] || quantity < 1) return;
+		const count = Math.floor(quantity);
+		if (!SEED_ITEMS[id] || count < 1) return;
+		const result = await orderSeeds(id, count);
+		if (!result.ok) {
+			setMarketMessage(result.error ?? "Purchase failed.");
+			return;
+		}
+		setMarketMessage(
+			`Bought ${count} ${item.name} for $${item.price * count}.`,
+		);
+	}
+
+	async function buyTool(id: ItemId, quantity: number) {
+		if (!isOwner || quantity < 1) return;
+		const item = MARKET_ITEMS[id as MarketItemId];
+		const result = economy.buy(item.price * quantity);
+		if (!result.success) {
+			setMarketMessage(result.error ?? "Purchase failed.");
+			return;
+		}
+		addItem(id, quantity);
+		setMarketMessage(`Bought the ${item.name}.`);
+	}
+
+	async function buyHardware(id: ItemId, quantity: number) {
+		if (!isOwner || quantity < 1) return;
+		const item = MARKET_ITEMS[id as MarketItemId];
 		try {
-			const res = await fetch("/api/inventory/buy", {
+			const res = await fetch("/api/hardware/buy", {
 				method: "POST",
 				credentials: "same-origin",
 				headers: { "Content-Type": "application/json" },
@@ -61,19 +93,31 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 				ok: boolean;
 				error?: string;
 				balance?: number;
-				seeds?: Record<string, number>;
+				count?: number;
 			};
-			if (!res.ok || !data.ok) {
+			if (!res.ok || !data.ok || data.balance === undefined) {
 				setMarketMessage(data.error ?? "Purchase failed.");
 				return;
 			}
-			if (typeof data.balance === "number") economy.setBalance(data.balance);
-			if (data.seeds) useInventoryStore.getState().hydrateSeeds(data.seeds);
+			economy.setBalance(data.balance);
+			if (data.count !== undefined) {
+				useInventoryStore.getState().setItemCount(id, data.count);
+				const state = useGameStore.getState();
+				if (state.activeFarm) {
+					const field =
+						id === "fence"
+							? "fence_count"
+							: id === "gate"
+								? "gate_count"
+								: "sprinkler_count";
+					state.setActiveFarm({ ...state.activeFarm, [field]: data.count });
+				}
+			}
 			setMarketMessage(
-				`Bought ${quantity} ${item.name} for $${item.price * quantity}.`,
+				`Bought ${quantity} ${item.name}${quantity > 1 ? "s" : ""} for $${item.price * quantity}.`,
 			);
 		} catch {
-			setMarketMessage("Could not reach the market.");
+			setMarketMessage("Could not reach the hardware store.");
 		}
 	}
 
@@ -152,6 +196,38 @@ export function useFarmMarket(target: string | undefined, isOwner: boolean) {
 				];
 			}
 			if (item.kind === "buy") {
+				if (HARDWARE_TOOLS.includes(item.id as ItemId)) {
+					const itemId = item.id as ItemId;
+					const owned = countItem(inventory, itemId);
+					return [
+						item.id,
+						{
+							owned,
+							disabled: !isOwner || owned > 0 || balance < item.price,
+							actionLabel: owned > 0 ? "Owned" : "Buy",
+							onAction: (quantity: number) => void buyTool(itemId, quantity),
+						},
+					];
+				}
+				if (HARDWARE_STOCK.includes(item.id as ItemId)) {
+					const itemId = item.id as ItemId;
+					const owned =
+						itemId === "fence"
+							? (farm?.fence_count ?? 0)
+							: itemId === "gate"
+								? (farm?.gate_count ?? 0)
+								: (farm?.sprinkler_count ?? 0);
+					return [
+						item.id,
+						{
+							owned,
+							disabled: !isOwner || balance < item.price,
+							actionLabel: "Buy",
+							onAction: (quantity: number) =>
+								void buyHardware(itemId, quantity),
+						},
+					];
+				}
 				const seedId = SEED_ITEMS[item.id];
 				return [
 					item.id,

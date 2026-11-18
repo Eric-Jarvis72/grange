@@ -55,7 +55,9 @@ export class LivestockMarketScene extends WalkingScene {
 	}
 
 	private addPen(pen: (typeof livestockPens)[number]): void {
-		this.addImage(livestockAnimalImages[pen.id], pen.x, pen.y - 76, pen.animalWidth, 10);
+		// Draw the animal above the pen/fence (z 30) so the fence never covers
+		// its head, but below the sign (z 40).
+		this.addImage(livestockAnimalImages[pen.id], pen.x, pen.y - 76, pen.animalWidth, 35);
 		this.addImage(livestockTroughImage, pen.x + 88, pen.y - 56, 62, 12);
 		this.addImage(livestockPenImage, pen.x, pen.y, pen.width, 30);
 		const signX = pen.x < MAP_WIDTH / 2 ? pen.x + 160 : pen.x - 160;

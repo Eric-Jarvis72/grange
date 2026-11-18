@@ -2,7 +2,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   @moduledoc false
   use GrangeWeb.ConnCase, async: false
 
-  alias Grange.{Accounts, FarmStore}
+  alias Grange.{Accounts, AuthToken, FarmStore}
 
   @alice %{
     "username" => "Alice",
@@ -28,7 +28,16 @@ defmodule GrangeWeb.InventoryControllerTest do
     |> put(path, Jason.encode!(params))
   end
 
-  defp register(conn \\ build_conn()), do: json_post(conn, "/api/auth/register", @alice)
+  defp register(conn), do: json_post(conn, "/api/auth/register", @alice)
+
+  # Registration leaves the account locked until the emailed link is used, so
+  # open the verify link programmatically and keep the resulting session cookie.
+  defp register_and_verify(conn \\ build_conn()) do
+    register(conn)
+    user = Accounts.find_by_email(@alice["email"])
+    token = AuthToken.issue(user.id, :verify_email)
+    json_post(build_conn(), "/api/auth/verify-email", %{"token" => token})
+  end
 
   test "inventory requires a session" do
     conn = get(build_conn(), "/api/inventory")
@@ -44,7 +53,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   end
 
   test "inventory returns the starter seeds, layout, and opening balance" do
-    conn = register() |> recycle() |> get("/api/inventory")
+    conn = register_and_verify() |> recycle() |> get("/api/inventory")
 
     assert %{"ok" => true, "balance" => 100, "seeds" => seeds, "slots" => slots} =
              json_response(conn, 200)
@@ -54,7 +63,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   end
 
   test "saving a layout moves slots and keeps splitting stacks" do
-    conn = register() |> recycle()
+    conn = register_and_verify() |> recycle()
 
     slots = [
       %{"area" => "hotbar", "slot" => 0, "item" => "hoe", "count" => 1},
@@ -73,7 +82,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   end
 
   test "saving a layout rejects seed totals that do not match the ledger" do
-    conn = register() |> recycle()
+    conn = register_and_verify() |> recycle()
 
     slots = [%{"area" => "hotbar", "slot" => 1, "item" => "seed-bag", "count" => 11}]
     conn = json_put(conn, "/api/inventory", %{"slots" => slots})
@@ -82,7 +91,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   end
 
   test "buying seeds persists and debits the account" do
-    conn = register() |> recycle()
+    conn = register_and_verify() |> recycle()
 
     conn =
       json_post(conn, "/api/inventory/buy", %{"item" => "tomato-seed", "quantity" => 1})
@@ -95,7 +104,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   end
 
   test "buying rejects an unaffordable or unknown seed" do
-    conn = register() |> recycle()
+    conn = register_and_verify() |> recycle()
 
     conn =
       json_post(conn, "/api/inventory/buy", %{"item" => "tomato-seed", "quantity" => 20})

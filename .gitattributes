@@ -1,0 +1,14 @@
+# Normalize line endings: text files are stored with LF and checked out with
+# LF on every platform, so Windows checkouts match CI and the Elixir formatter
+# and Credo (which reject CRLF) behave the same everywhere.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary

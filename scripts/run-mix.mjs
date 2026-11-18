@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,35 @@ const args = process.argv.slice(2);
 function onPath(command) {
 	const result = spawnSync(command, ["--version"], { stdio: "ignore" });
 	return result.error?.code !== "ENOENT";
+}
+
+/**
+ * Read the repo-root `.env` so `pnpm dev` sees the variables the
+ * `.env.example` template documents (Phoenix does not read `.env` itself).
+ * Real environment variables win, so a shell export overrides the file.
+ */
+function dotEnv() {
+	const file = join(root, ".env");
+	if (!existsSync(file)) return {};
+
+	const env = {};
+	for (const raw of readFileSync(file, "utf8").split(/\r?\n/)) {
+		const line = raw.trim();
+		if (!line || line.startsWith("#")) continue;
+		const eq = line.indexOf("=");
+		if (eq < 1) continue;
+
+		const key = line.slice(0, eq).trim().replace(/^export\s+/, "");
+		let value = line.slice(eq + 1).trim();
+		if (
+			(value.startsWith('"') && value.endsWith('"')) ||
+			(value.startsWith("'") && value.endsWith("'"))
+		) {
+			value = value.slice(1, -1);
+		}
+		env[key] = value;
+	}
+	return env;
 }
 
 /**
@@ -59,7 +88,7 @@ function msvcEnvironment() {
 	return env;
 }
 
-const env = { ...process.env, ...msvcEnvironment() };
+const env = { ...dotEnv(), ...process.env, ...msvcEnvironment() };
 
 const direct = spawnSync("mix", args, { cwd, stdio: "inherit", env });
 if (direct.error?.code !== "ENOENT") {
