@@ -19,18 +19,21 @@ import { type CasinoOverlay, CasinoOverlays } from "./CasinoOverlays";
 import type { CasinoScene } from "./CasinoScene";
 import { ComboCounter } from "./ComboCounter";
 import type { FarmMapScene } from "./FarmMapScene";
+import { FarmStatusHud } from "./FarmStatusHud";
 import { FishingOverlay } from "./FishingOverlay";
 import type { FarmHudSnapshot } from "./farmHud";
 import { subscribeFarmPeers } from "./farmPresence";
 import "./farmMap.css";
 import { HouseMenu } from "./HouseMenu";
 import { leaveHub, subscribeHubPeers } from "./hubClient";
+import { LightingOverlay } from "./LightingOverlay";
 import type { LivestockMarketScene } from "./LivestockMarketScene";
 import { LivestockPurchaseOverlay } from "./LivestockPurchaseOverlay";
 import type { MarketplaceScene } from "./MarketplaceScene";
 import { MarketWindow } from "./MarketWindow";
 import { MARKETS } from "./marketData";
 import { NpcTradeWindow } from "./NpcTradeWindow";
+import { SleepVoteToast } from "./SleepVoteToast";
 import { TravelMenu } from "./TravelMenu";
 import { useBarnReconcile } from "./useBarnReconcile";
 import { useFarmMarket } from "./useFarmMarket";
@@ -48,6 +51,7 @@ import type { WorldArea } from "./WalkingScene";
 export default function FarmMap() {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const engineRef = useRef<ex.Engine | null>(null);
+	const [gameEngine, setGameEngine] = useState<ex.Engine | null>(null);
 	useInventoryKeys();
 	const sceneRef = useRef<FarmMapScene | null>(null);
 	const marketSceneRef = useRef<MarketplaceScene | null>(null);
@@ -195,6 +199,7 @@ export default function FarmMap() {
 		openNpcTrade: openNpc,
 		openFarmTravelMenu,
 		openMarketplaceTravelMenu,
+		onEngineChange: setGameEngine,
 	});
 
 	// Route farm hints and errors into the bottom-left feed.
@@ -270,6 +275,11 @@ export default function FarmMap() {
 				className="farm-map-canvas"
 				aria-label={`${area} map. Use WASD or arrow keys to walk.`}
 			/>
+			<LightingOverlay
+				engine={gameEngine}
+				area={area}
+				gameCanvasRef={canvasRef}
+			/>
 			{market && (
 				<MarketWindow
 					market={MARKETS[market]}
@@ -293,25 +303,20 @@ export default function FarmMap() {
 				<BankWindow desk={bankDesk} isOwner={isOwner} onClose={closeBank} />
 			)}
 			{travelPrompt && (
-				<div className="farm-map-travel-prompt" data-testid="travel-prompt">
+				<div
+					className={`farm-map-travel-prompt${travelPrompt.includes("closed") ? " farm-map-travel-prompt-closed" : ""}`}
+					data-testid="travel-prompt"
+				>
 					{travelPrompt}
 				</div>
 			)}
-			{area === "Farm" && (
-				<div className="farm-hud" data-testid="farm-hud">
-					<div className="farm-status">
-						<span data-testid="farm-tomatoes">🍅 {hud.tomatoes}</span>
-					</div>
-					<p className="farm-hint" data-testid="farm-hint">
-						{hud.message}
-					</p>
-				</div>
-			)}
+			{area === "Farm" && <FarmStatusHud hud={hud} />}
 			{!market && (!isOwner || inventoryHydrated) && (
 				<Hud tiles={farm?.tiles.length ?? 0} hovered={hud.hovered} />
 			)}
 			<ComboCounter />
 			<InventoryPanel />
+			<SleepVoteToast />
 			{paused && <PauseMenu />}
 			{houseOpen && isOwner && farm && (
 				<HouseMenu owner={target ?? ""} farm={farm} onClose={closeHouseMenu} />

@@ -1,5 +1,6 @@
 import type { CropId } from "./crops";
 import type { FarmTileState } from "./farm";
+import type { DayPhase, WorldTime } from "./mechanics";
 
 /** A registered account as sent over the wire (no password hash). */
 export interface Player {
@@ -55,7 +56,12 @@ export interface ActiveFarm {
 	/** Livestock owned by this farm, keyed by animal species. */
 	animals: Record<string, number>;
 	/** Individual animals placed on the map; `animals` counts only carried ones. */
-	placed_animals?: Array<{ id: number; species: "cow" | "hen" | "sheep" | "pig"; x: number; y: number }>;
+	placed_animals?: Array<{
+		id: number;
+		species: "cow" | "hen" | "sheep" | "pig";
+		x: number;
+		y: number;
+	}>;
 	land_level?: number;
 	/** Whether strangers may join this farm. */
 	is_public: boolean;
@@ -75,7 +81,29 @@ export interface ActiveFarm {
 		carried: boolean;
 	}>;
 	prop_inventory: Record<string, number>;
+	/** Items stored in the barn's storage container. */
 	storage: Record<string, number>;
+	/** The shared day/night clock snapshot, attached to every farm view. */
+	time?: WorldTime;
+	/** Convenience top-level mirrors of `time`, for simple UI checks. */
+	cycle_time_ms?: number;
+	day_phase?: DayPhase;
+}
+
+/** A farm-wide sleep vote prompt pushed while the clock is at night. */
+export interface SleepVote {
+	initiator: string;
+	required: string[];
+	accepted: string[];
+	declined: string[];
+}
+
+export type SleepVoteResult = "accepted" | "declined" | "expired" | "skipped";
+
+/** The outcome of a sleep vote, broadcast to everyone on the farm. */
+export interface SleepVoteResultPayload {
+	result: SleepVoteResult;
+	initiator: string;
 }
 
 export type FarmPropAction =

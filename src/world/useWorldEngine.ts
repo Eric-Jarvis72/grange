@@ -49,6 +49,8 @@ interface SceneCallbacks {
 	openNpcTrade: () => void;
 	openFarmTravelMenu: () => void;
 	openMarketplaceTravelMenu: () => void;
+	/** Publishes the live engine for canvas overlays such as lighting. */
+	onEngineChange?: (engine: ex.Engine | null) => void;
 }
 
 /** Builds the Excalibur engine and its scenes for the world route. */
@@ -80,6 +82,7 @@ export function useWorldEngine(
 		openNpcTrade,
 		openFarmTravelMenu,
 		openMarketplaceTravelMenu,
+		onEngineChange,
 	} = options;
 
 	useEffect(() => {
@@ -101,6 +104,7 @@ export function useWorldEngine(
 			backgroundColor: ex.Color.fromHex("#79a44d"),
 		});
 		engineRef.current = engine;
+		onEngineChange?.(engine);
 
 		const scene = new FarmMapScene(
 			target,
@@ -218,6 +222,7 @@ export function useWorldEngine(
 			livestockRef.current = null;
 			bankRef.current = null;
 			engineRef.current = null;
+			onEngineChange?.(null);
 			engine.stop();
 			engine.dispose();
 		};
@@ -246,5 +251,6 @@ export function useWorldEngine(
 		openNpcTrade,
 		openFarmTravelMenu,
 		openMarketplaceTravelMenu,
+		onEngineChange,
 	]);
 }

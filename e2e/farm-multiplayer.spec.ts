@@ -98,7 +98,7 @@ test("farmhouse settings control visitors and farm presence", async ({
 	await clickWorld(owner, victim.x, victim.y - 32);
 	await expect(owner.getByTestId("farm-hint")).toContainText("BONK!");
 
-	await expect(guest.locator("canvas")).toHaveAttribute(
+	await expect(guest.locator("canvas.farm-map-canvas")).toHaveAttribute(
 		"aria-label",
 		/^Farm map/,
 	);

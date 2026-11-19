@@ -78,7 +78,11 @@ export function MarketWindow({
 						{STALL_TITLES[stall]}
 					</h2>
 					{!isHardware && (
-						<div className="market-stall-tabs" role="tablist" aria-label="Stalls">
+						<div
+							className="market-stall-tabs"
+							role="tablist"
+							aria-label="Stalls"
+						>
 							<button
 								type="button"
 								role="tab"

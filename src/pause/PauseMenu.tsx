@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { dayPhaseNow } from "../../shared/mechanics";
 import { logout } from "../auth";
+import { emitSleep } from "../socket";
 import { useGameStore } from "../store";
 import { usePauseStore } from "./pauseStore";
 import "./pause.css";
@@ -14,10 +16,34 @@ export function PauseMenu() {
 	const paused = usePauseStore((s) => s.paused);
 	const setPaused = usePauseStore((s) => s.setPaused);
 	const username = useGameStore((s) => s.username);
+	const worldTime = useGameStore((s) => s.worldTime);
+	const activeFarm = useGameStore((s) => s.activeFarm);
 	const navigate = useNavigate();
 	const [note, setNote] = useState<string | null>(null);
+	const [sleepNote, setSleepNote] = useState<string | null>(null);
+	const isNight = worldTime ? dayPhaseNow(worldTime) === "night" : false;
 
 	if (!paused) return null;
+
+	function requestSleep() {
+		const owner = activeFarm?.owner;
+		if (!owner) {
+			setSleepNote("Visit a farm to sleep.");
+			return;
+		}
+		setSleepNote(null);
+		emitSleep(owner, (res) => {
+			if (!res.ok) {
+				setSleepNote(res.error ?? "Could not sleep.");
+				return;
+			}
+			setSleepNote(
+				res.result === "skipped"
+					? "You slept through the night."
+					: "Sleep vote started.",
+			);
+		});
+	}
 
 	// Quitting to the menu keeps the session: the farm closes, the account
 	// stays signed in, and the menu's Continue re-enters the world.
@@ -82,6 +108,15 @@ export function PauseMenu() {
 					</button>
 					<button
 						type="button"
+						data-testid="pause-sleep"
+						className="pause-button"
+						disabled={!isNight}
+						onClick={requestSleep}
+					>
+						{isNight ? "Sleep Until Morning" : "Sleep (only at night)"}
+					</button>
+					<button
+						type="button"
 						data-testid="pause-quit-menu"
 						className="pause-button"
 						onClick={quitToMenu}
@@ -101,6 +136,11 @@ export function PauseMenu() {
 				{note && (
 					<p className="pause-note" data-testid="pause-note">
 						{note}
+					</p>
+				)}
+				{sleepNote && (
+					<p className="pause-note" data-testid="pause-sleep-note">
+						{sleepNote}
 					</p>
 				)}
 				<p className="pause-hint">[Esc] Resume</p>

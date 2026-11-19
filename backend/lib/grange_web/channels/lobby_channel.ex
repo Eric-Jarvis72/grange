@@ -17,7 +17,14 @@ defmodule GrangeWeb.LobbyChannel do
   def join("lobby", _payload, socket) do
     GrangeWeb.Endpoint.subscribe("lobby")
     ensure_farm(socket)
-    {:ok, %{players: players(), farms: FarmStore.summaries(), items: items(socket)}, socket}
+
+    {:ok,
+     %{
+       players: players(),
+       farms: FarmStore.summaries(),
+       items: items(socket),
+       time: Grange.WorldClock.snapshot()
+     }, socket}
   end
 
   @impl true

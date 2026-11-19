@@ -16,10 +16,12 @@ defmodule GrangeWeb.FarmChannel do
   alias Grange.{
     BarnStorage,
     FarmGateActions,
+    FarmPresence,
     FarmSettings,
     FarmStore,
     Inventory,
     NpcQuest,
+    SleepVotes,
     WorldPosition
   }
 
@@ -53,6 +55,7 @@ defmodule GrangeWeb.FarmChannel do
 
       true ->
         GrangeWeb.Endpoint.subscribe("farm:" <> owner)
+        FarmPresence.join(owner, username)
         track(username, owner, nil, nil)
         send(self(), :after_join)
 
@@ -172,6 +175,33 @@ defmodule GrangeWeb.FarmChannel do
   end
 
   @impl true
+  def handle_in("sleep", _payload, socket) do
+    with_user(socket, fn owner, username ->
+      case SleepVotes.request(owner, username) do
+        {:ok, result} -> {:reply, {:ok, %{result: result}}, socket}
+        {:error, reason} -> {:reply, {:error, %{error: reason}}, socket}
+      end
+    end)
+  end
+
+  @impl true
+  def handle_in("sleepVote", %{"decision" => decision}, socket)
+      when decision in ["accept", "decline"] do
+    with_user(socket, fn owner, username ->
+      action = if decision == "accept", do: :accept, else: :decline
+
+      case SleepVotes.vote(owner, username, action) do
+        {:ok, _result} -> {:reply, :ok, socket}
+        {:error, reason} -> {:reply, {:error, %{error: reason}}, socket}
+      end
+    end)
+  end
+
+  def handle_in("sleepVote", _payload, socket) do
+    {:reply, {:error, %{error: "invalid vote"}}, socket}
+  end
+
+  @impl true
   def handle_out(event, payload, socket) do
     push(socket, event, payload)
     {:noreply, socket}
@@ -199,6 +229,15 @@ defmodule GrangeWeb.FarmChannel do
       is_nil(user) -> {:reply, {:error, %{error: "not logged in"}}, socket}
       user.username != owner -> {:reply, {:error, %{error: "not your farm"}}, socket}
       true -> handler.(owner)
+    end
+  end
+
+  defp with_user(socket, handler) do
+    with %{username: username} <- socket.assigns[:user],
+         owner when is_binary(owner) <- socket.assigns[:owner] do
+      handler.(owner, username)
+    else
+      _ -> {:reply, {:error, %{error: "not logged in"}}, socket}
     end
   end
 

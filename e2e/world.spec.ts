@@ -32,7 +32,8 @@ async function pressSpaceUntil(
 
 test("every world area loads without asset or page errors", async ({
 	page,
-}) => {	const pageErrors: string[] = [];
+}) => {
+	const pageErrors: string[] = [];
 	const failedAssets: string[] = [];
 
 	page.on("pageerror", (error) => {
