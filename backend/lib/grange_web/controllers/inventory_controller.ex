@@ -8,7 +8,7 @@ defmodule GrangeWeb.InventoryController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Grange.{Accounts, FarmStore, Inventory}
+  alias Grange.{Accounts, FarmStore, Inventory, ItemCatalog, PlayerItems}
 
   @session_key :user_token
 
@@ -56,6 +56,22 @@ defmodule GrangeWeb.InventoryController do
     end
   end
 
+  @doc "Admin-only temporary item spawner for creative testing."
+  def admin_grant(conn, params) do
+    case current_user(conn) do
+      nil ->
+        unauthorized(conn)
+
+      user ->
+        if user.is_admin do
+          FarmStore.ensure(user.username)
+          grant_admin_item(conn, user, params)
+        else
+          forbidden(conn)
+        end
+    end
+  end
+
   defp save_layout(conn, user, slots) when is_list(slots) do
     case Inventory.save_layout(user.username, slots) do
       {:ok, saved} ->
@@ -83,6 +99,30 @@ defmodule GrangeWeb.InventoryController do
     end
   end
 
+  defp grant_admin_item(conn, user, params) do
+    item = Map.get(params, "item")
+    count = quantity(Map.get(params, "count", 1))
+    max = if is_binary(item), do: ItemCatalog.max_stack(item)
+
+    cond do
+      is_nil(max) ->
+        conn |> put_status(:bad_request) |> json(%{ok: false, error: "invalid item"})
+
+      not is_integer(count) or count < 1 ->
+        conn |> put_status(:bad_request) |> json(%{ok: false, error: "invalid count"})
+
+      true ->
+        actual = min(count, max)
+        PlayerItems.add(user.username, item, actual)
+
+        json(conn, %{
+          ok: true,
+          count: actual,
+          items: PlayerItems.map(user.username)
+        })
+    end
+  end
+
   defp quantity(value) when is_integer(value), do: value
 
   defp quantity(value) when is_binary(value) do
@@ -96,6 +136,10 @@ defmodule GrangeWeb.InventoryController do
 
   defp unauthorized(conn) do
     conn |> put_status(:unauthorized) |> json(%{ok: false, error: "not signed in"})
+  end
+
+  defp forbidden(conn) do
+    conn |> put_status(:forbidden) |> json(%{ok: false, error: "admin only"})
   end
 
   defp current_user(conn) do

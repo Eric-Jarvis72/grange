@@ -4,7 +4,7 @@ defmodule GrangeWeb.FarmChannelTest do
 
   import Grange.FarmFixtures
 
-  alias Grange.{Accounts, Barn, Farm, FarmStore, Inventory, NpcQuest, Repo}
+  alias Grange.{Accounts, Barn, Farm, FarmStore, Inventory, NpcQuest, PlayerItems, Repo}
   alias GrangeWeb.ChannelCase, as: Helper
   alias GrangeWeb.Presence
 
@@ -202,6 +202,42 @@ defmodule GrangeWeb.FarmChannelTest do
     public_farm("Bob")
     assert {:ok, visitor_reply, _socket} = join_farm("Carol", "Bob")
     assert visitor_reply.npc == nil
+  end
+
+  test "the owner can queue an overnight catalyst and gets the item count back" do
+    full_farm("Alice")
+    PlayerItems.add("Alice", "gilded-dust", 1)
+    Inventory.add("Alice", "wheat-seed", 1)
+
+    FarmStore.action("Alice", %{"kind" => "till", "x" => 1, "y" => 1})
+    FarmStore.action("Alice", %{"kind" => "plant", "x" => 1, "y" => 1, "crop" => "wheat"})
+
+    {:ok, _reply, socket} = join_farm("Alice", "Alice")
+
+    assert_reply(
+      push(socket, "useCatalyst", %{"item" => "gilded-dust"}),
+      :ok,
+      reply
+    )
+
+    assert reply.pending.standard == "wheat"
+    assert reply.items["gilded-dust"] == 0
+  end
+
+  test "a visitor cannot use a catalyst" do
+    editable_farm("Alice")
+    FarmStore.ensure("Bob")
+    PlayerItems.add("Bob", "gilded-dust", 1)
+    {:ok, _reply, socket} = join_farm("Bob", "Alice")
+
+    assert_reply(
+      push(socket, "useCatalyst", %{"item" => "gilded-dust"}),
+      :error,
+      reply
+    )
+
+    assert reply.error == "not your farm"
+    assert PlayerItems.map("Bob")["gilded-dust"] == 1
   end
 
   test "the owner can see the intro and hand in ten tomatoes" do

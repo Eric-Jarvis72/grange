@@ -1,13 +1,17 @@
 import { useEffect } from "react";
 import { useInventoryStore } from "../inventory/inventoryStore";
 import type { ActiveFarm } from "../../shared/types";
+import { catalystForItem } from "../../shared/crops";
 import { useNotificationStore } from "../notifications/notificationStore";
 import { livestockPens } from "./livestockData";
 import { isAnimalId } from "./animalPlacement";
 import { MOVABLE_PROP_ASSETS } from "./mapData";
 
 /** Mirror server-owned farm objects into the local inventory display. */
-export function useFarmObjectInventory(farm: ActiveFarm | null, isOwner: boolean): void {
+export function useFarmObjectInventory(
+	farm: ActiveFarm | null,
+	isOwner: boolean,
+): void {
 	const setItemCount = useInventoryStore((s) => s.setItemCount);
 	const inventoryHydrated = useInventoryStore((s) => s.inventoryHydrated);
 	const fenceCount = farm?.fence_count;
@@ -17,10 +21,12 @@ export function useFarmObjectInventory(farm: ActiveFarm | null, isOwner: boolean
 	const ownedAnimals = farm?.animals;
 
 	useEffect(() => {
-		if (inventoryHydrated && fenceCount !== undefined && isOwner) setItemCount("fence", fenceCount);
+		if (inventoryHydrated && fenceCount !== undefined && isOwner)
+			setItemCount("fence", fenceCount);
 	}, [fenceCount, isOwner, inventoryHydrated, setItemCount]);
 	useEffect(() => {
-		if (inventoryHydrated && gateCount !== undefined && isOwner) setItemCount("gate", gateCount);
+		if (inventoryHydrated && gateCount !== undefined && isOwner)
+			setItemCount("gate", gateCount);
 	}, [gateCount, isOwner, inventoryHydrated, setItemCount]);
 	useEffect(() => {
 		if (inventoryHydrated && sprinklerCount !== undefined && isOwner)
@@ -42,16 +48,39 @@ export function useFarmItemNotices(heldItem: string | null): void {
 	const pushNotice = useNotificationStore((s) => s.push);
 	useEffect(() => {
 		if (heldItem === "fence")
-			pushNotice("Hold left mouse to preview a fence; release on green to place.", "system");
+			pushNotice(
+				"Hold left mouse to preview a fence; release on green to place.",
+				"system",
+			);
 		if (heldItem === "gate")
-			pushNotice("Gate: click a clear tile corner to place. Press E nearby to open or close.", "system");
+			pushNotice(
+				"Gate: click a clear tile corner to place. Press E nearby to open or close.",
+				"system",
+			);
 		if (heldItem === "shovel")
-			pushNotice("Shovel: click a fence, farm object, or placed animal to pick it up.", "system");
+			pushNotice(
+				"Shovel: click a fence, farm object, or placed animal to pick it up.",
+				"system",
+			);
 		if (isAnimalId(heldItem))
-			pushNotice(`Hold left mouse to preview a ${heldItem}; release on clear ground or inside a pen.`, "system");
+			pushNotice(
+				`Hold left mouse to preview a ${heldItem}; release on clear ground or inside a pen.`,
+				"system",
+			);
 		if (heldItem === "sprinkler")
-			pushNotice("Hold left mouse to preview a sprinkler; release on green to place.", "system");
+			pushNotice(
+				"Hold left mouse to preview a sprinkler; release on green to place.",
+				"system",
+			);
+		if (heldItem && catalystForItem(heldItem))
+			pushNotice(
+				"Catalyst: right-click the stack or click the world to use it. It works at dawn.",
+				"system",
+			);
 		if (heldItem && MOVABLE_PROP_ASSETS.some((asset) => asset === heldItem))
-			pushNotice(`Hold left mouse to preview ${heldItem}; release on green to place.`, "system");
+			pushNotice(
+				`Hold left mouse to preview ${heldItem}; release on green to place.`,
+				"system",
+			);
 	}, [heldItem, pushNotice]);
 }

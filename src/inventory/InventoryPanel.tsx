@@ -1,4 +1,5 @@
 import { GRID_SIZE, HOTBAR_SIZE, useInventoryStore } from "./inventoryStore";
+import { AdminSpawner } from "./AdminSpawner";
 import { InventorySlot } from "./InventorySlot";
 import { PlayerPreview } from "./PlayerPreview";
 
@@ -65,6 +66,7 @@ export function InventoryPanel() {
 							Drag or shift-click to move · stacks merge · right-click a stack
 							to split half
 						</p>
+						<AdminSpawner />
 					</div>
 				</div>
 			</div>

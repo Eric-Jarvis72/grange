@@ -10,6 +10,7 @@ import type {
 } from "../../shared/types";
 import {
 	type Ack,
+	type CatalystAck,
 	type FarmAck,
 	type FarmActionAck,
 	type FarmSettings,
@@ -17,6 +18,11 @@ import {
 	socket,
 } from "../socket";
 import { useGameStore } from "../store";
+import { useNotificationStore } from "../notifications/notificationStore";
+import {
+	type CatalystAppliedPayload,
+	catalystAppliedNotice,
+} from "./catalystMessages";
 import { attachFarmPresence, resetFarmPresence } from "./farmPresence";
 import { useNpcStore } from "./npcStore";
 
@@ -70,6 +76,13 @@ export function emitVisitFarm(
 		const result = payload as SleepVoteResultPayload;
 		useGameStore.getState().setSleepVote(null);
 		useGameStore.getState().setSleepResult(result);
+	});
+
+	channel.on("catalystApplied", (payload: unknown) => {
+		const applied = payload as CatalystAppliedPayload;
+		useNotificationStore
+			.getState()
+			.push(catalystAppliedNotice(applied), "system");
 	});
 
 	// Dev/test builds can jump the farmhand quest; keep the mirror in step.
@@ -178,7 +191,6 @@ export function emitFarmAction(
 		.receive("ok", (payload: unknown) => {
 			const data = (payload ?? {}) as {
 				seeds?: Record<string, number>;
-				drops?: string[];
 			};
 			cb?.({ ok: true, ...data });
 		})
@@ -189,6 +201,39 @@ export function emitFarmAction(
 				ok: false,
 				error: reasonOf(payload) ?? "Invalid action",
 				seeds,
+			});
+		})
+		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));
+}
+
+/** Owner-only: consumes a catalyst and queues its next-dawn transformation. */
+export function emitUseCatalyst(
+	owner: string,
+	item: string,
+	cb?: (res: CatalystAck) => void,
+): void {
+	const channel = farmChannel;
+	if (!channel || farmOwner !== owner) {
+		cb?.({ ok: false, error: "not visiting farm" });
+		return;
+	}
+
+	channel
+		.push("useCatalyst", { item })
+		.receive("ok", (payload: unknown) => {
+			const data = (payload ?? {}) as {
+				pending?: CatalystAck["pending"];
+				items?: Record<string, number>;
+			};
+			cb?.({ ok: true, ...data });
+		})
+		.receive("error", (payload: unknown) => {
+			const items = (payload as { items?: Record<string, number> } | null)
+				?.items;
+			cb?.({
+				ok: false,
+				error: reasonOf(payload) ?? "Could not use catalyst",
+				items,
 			});
 		})
 		.receive("timeout", () => cb?.({ ok: false, error: "Timed out" }));

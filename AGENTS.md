@@ -43,7 +43,8 @@ something new.
 Grange is a peaceful farming game with a hub world:
 
 - Start on your own farm with a run-down farmhouse, barn, fields, and a train.
-- Till, plant, water, and harvest crops. Crops can mutate into rare variants.
+- Till, plant, water, and harvest crops. Overnight catalysts can transform
+  standard crops into rare variants.
 - Buy seeds at the marketplace; sell produce from the barn.
 - Take the train between your farm, the marketplace, and the casino.
 - Casino games (blackjack, poker, roulette, slots) spend and return
@@ -227,7 +228,8 @@ releases stay current; there is no separate release migration task.
 - Passwords are Argon2-hashed. Sessions are 30 days; only a SHA-256 hex hash of
   the token is stored.
 - `is_admin` is a DB flag. On sign-in the client grants the full item catalog
-  **client-side**; there is no server-side admin authorization middleware.
+  **client-side**; the temporary `/api/admin/item` spawner checks the flag
+  server-side before persisting durable items.
 
 ### 5.5 HTTP API (non-channel)
 
@@ -247,9 +249,13 @@ auth is the `_grange_key` cookie; the socket uses the token instead.
 | GET | `/api/auth/mailbox` | none | Dev/test only (`enable_test_routes`); returns the console mailer's last message for `?to=` |
 | POST | `/api/economy/transaction` | cookie | `{delta}` integer; clamped at zero |
 | POST | `/api/hardware/buy` | cookie | `{item, quantity}` → `{balance, sprinkler_count}` |
+| POST | `/api/admin/item` | admin cookie | Temporary creative spawner: `{item, count}` → `{count, items}` |
 | GET | `/api/state` | none | `{playerCount, farmCount}` |
 | POST | `/api/reset` | none | Dev/test only; wipes accounts and farms |
 | POST | `/api/dev/npc` | cookie | Dev/test only; forces farmhand stage/counters and fills the barn |
+| POST | `/api/dev/admin` | cookie | Dev/test only; promotes the signed-in account to admin |
+| POST | `/api/dev/item` | cookie | Dev/test only; grants catalyst items to the signed-in player |
+| POST | `/api/dev/dawn` | cookie | Dev/test only; forces pending catalysts to resolve |
 
 Unmatched `/api/*` routes return JSON 404 before the SPA fallback. Every other
 path serves the built `index.html`.
@@ -296,7 +302,8 @@ Client events:
 
 | Event | Payload | Allowed caller | Success | Error |
 | --- | --- | --- | --- | --- |
-| `farmAction` | `{action: FarmAction}` | owner, or visitor while `visitor_edit` | `{seeds, drops}` | `{error, seeds}` |
+| `farmAction` | `{action: FarmAction}` | owner, or visitor while `visitor_edit` | `{seeds}` | `{error, seeds}` |
+| `useCatalyst` | `{item: catalystId}` | farm owner only | `{pending, items}` | `{error, items?}` |
 | `gateAction` | `{action: {kind: "toggle_gate", x, y}}` | any joined user | `:ok` | `{error: reason}` |
 | `farmPropAction` | `{action: {kind: "dig", index} \| {kind: "place", asset, x, y}}` | owner, or visitor while `visitor_edit`, or any admin | `:ok` | `{error: reason}` |
 | `barnAction` | `{action: {kind: "deposit" \| "withdraw", item, count}}` | farm owner only | `:ok` | `{error: reason}` |
@@ -324,8 +331,7 @@ Authorization rules (`FarmChannel`):
 - Prop actions follow the same `visitor_edit` gate, and admins may rearrange
   props on any farm they can join.
 - Barn storage actions, produce sales, and settings are owner-only.
-- Seed spending and mutation drops follow the actor; harvested produce goes to
-  the owner's barn.
+- Seed spending follows the actor; harvested produce goes to the owner's barn.
 
 Farm presence is cosmetic and keyed by username, exactly like hub presence. It
 lives on this channel; there is no separate farm-presence channel or table.
@@ -362,16 +368,15 @@ See `notes/hub-multiplayer.md` for the client flow and tuning constants.
    - records the combo (`ComboController`),
    - plays the scythe sweep FX,
    - possibly emits a combo-spread action to an orthogonal neighbor,
-   - emits `farmAction` with `{kind, x, y, crop?, tool?, comboMutationMultiplier?}`.
+   - emits `farmAction` with `{kind, x, y, crop?, tool?}`.
 5. `FarmChannel.handle_in("farmAction", ...)` authorizes the owner or a
    visitor while `visitor_edit` is on, then calls
    `FarmStore.action(owner, action, actor)`.
 6. `FarmStore` normalizes the action, runs it in an Ecto transaction, persists
-   the change, spends the actor's seed, persists any mutation drop in the
-   actor's inventory, and broadcasts `farmUpdate` + lobby `farms`. Harvested
-   produce goes to the owner's barn.
-7. The `farmAction` ack returns `{seeds, drops}` (or `{error, seeds}`); the
-   client applies the authoritative seed counts and announces any drop.
+   the change, spends the actor's seed, and broadcasts `farmUpdate` + lobby
+   `farms`. Harvested produce goes to the owner's barn.
+7. The `farmAction` ack returns `{seeds}` (or `{error, seeds}`); the
+   client applies the authoritative seed counts to the hotbar.
 8. `src/socket.ts` receives `farmUpdate`, calls
    `useGameStore.setActiveFarm(farm)`.
 9. `FarmMapScene.onPreUpdate` calls `FarmTileSync.sync()` and repaints only
@@ -522,7 +527,7 @@ single-use token machinery backs both email verification and password reset.
 │   ├── auth.ts                ← User/AuthUser/Session types
 │   ├── crops.ts               ← crop registry (single TS source of truth)
 │   ├── farm.ts                ← tile types, grid constants, crop encode/decode
-│   ├── mechanics.ts           ← combo/synergy/mutation tuning
+│   ├── mechanics.ts           ← combo/synergy tuning
 │   └── types.ts               ← channel/wire payload types
 ├── src/
 │   ├── main.tsx / App.tsx     ← bootstrap + routes
@@ -546,7 +551,7 @@ single-use token machinery backs both email verification and password reset.
 │       ├── mapData.ts         ← terrain/props/grid/spawn constants
 │       ├── marketplaceData.ts / casinoData.ts
 │       ├── testMode.ts        ← dev-only e2e hooks (boot scene, walk speed)
-│       ├── farmActions.ts     ← pure action resolution + synergy + drops
+│       ├── farmActions.ts     ← pure action resolution + synergy
 │       ├── farmActionRunner.ts← emit farming actions + combo/sweep
 │       ├── combo* / farmCombo ← combo tracker/controller/store/HUD
 │       ├── tileSync / farmSceneTiles / cropLayer
@@ -575,7 +580,9 @@ single-use token machinery backs both email verification and password reset.
 │   │   ├── farm.ex            ← pure tile state machine + bounds
 │   │   ├── hub.ex             ← hub area whitelist + position clamping
 │   │   ├── crops.ex           ← Elixir mirror of crop registry/mechanics
-│   │   ├── farm_action.ex     ← action opts + mutation drop roll
+│   │   ├── farm_action.ex     ← action opts + payload normalising
+│   │   ├── farm_catalyst.ex / farm_catalysts.ex ← pending overnight catalysts
+├── farm_broadcast.ex ← farm/lobby/catalyst PubSub fan-out
 │   │   ├── barn.ex / barn_item.ex
 │   │   ├── farm_fences.ex / farm_gates.ex / farm_props.ex
 │   │   ├── farm_gate_actions.ex ← visitor-safe gate toggle
@@ -624,11 +631,12 @@ single-use token machinery backs both email verification and password reset.
 | `farm_gates` | `owner` FK, `x`, `y`, `direction`, `open` | Unique `(owner, x, y)`. `direction` is `horizontal` or `vertical`. |
 | `farm_sprinklers` | `owner` FK, `x`, `y` | Unique `(owner, x, y)`. `(x, y)` is the top-left tile of the watered 2x2; the object is drawn on that 2x2's shared corner. |
 | `farm_props` | `owner` FK, `source_index`, `asset`, `x`, `y`, `carried` | Unique `(owner, source_index)`. Indices map to the starter prop list. |
+| `farm_catalysts` | `owner` FK, `item`, `applies_at` integer ms | One pending overnight catalyst per `(owner, item)`. Removed when dawn applies it. |
 | `npc_quests` | `owner` FK, `stage`, `tomatoes_sold`, `lettuce_sold`, `wheat_sold` | One row per farm. `stage` is `intro`, `tomatoes`, `supplies`, or `complete`; counters cap at 10. |
 
 All foreign keys cascade on farm delete. `Accounts.reset/0` deletes sessions
 then users; `FarmStore.reset/0` deletes tiles, barn items, fences, gates,
-sprinklers, props, farmhand quests, then farms.
+sprinklers, props, pending catalysts, farmhand quests, then farms.
 
 ### 7.2 Wire types (`shared/types.ts`)
 
@@ -675,7 +683,6 @@ export type FarmAction = {
   y: number;
   crop?: CropId;                       // plant only
   tool?: "hand" | "scythe";            // harvest only
-  comboMutationMultiplier?: number;    // 1 or 1.5
 };
 ```
 
@@ -758,9 +765,9 @@ The authoritative TS registry is `shared/crops.ts`; the Elixir mirror is
 | Wheat | `wheat` | standard | 5 | 2 | 4 | scythe only | 1 | — | pack |
 | Lettuce | `lettuce` | standard | 5 | 4 | 7 | hand or scythe | 1 | — | moisture |
 | Tomato | `tomato` | standard | 5 | 8 | 5 | hand or scythe | 2 | 2 | space |
-| Midas Wheat | `midas_wheat` | rare | 4 | drop only | 10 | scythe only | 1 | — | pack |
-| Frost-Crisp Lettuce | `frost_lettuce` | rare | 4 | drop only | 15 | hand or scythe | 1 | — | moisture |
-| Sun-Burst Tomato | `sunburst_tomato` | rare | 3 | drop only | 8 | hand or scythe | 3 | 1 | space |
+| Midas Wheat | `midas_wheat` | rare | 4 | catalyst only | 30 | scythe only | 1 | — | pack |
+| Frost-Crisp Lettuce | `frost_lettuce` | rare | 4 | catalyst only | 45 | hand or scythe | 1 | — | moisture |
+| Sun-Burst Tomato | `sunburst_tomato` | rare | 3 | catalyst only | 24 | hand or scythe | 3 | 1 | space |
 
 Hand-harvest vs scythe:
 
@@ -781,7 +788,7 @@ Hand-harvest vs scythe:
   server tick nor the client applies it yet (see gaps).
 - **Tomato / Sun-Burst — Space-Hungry:** −20% growth if touching another
   tomato-family crop; +15% if touching lettuce.
-- Positive synergy for mutation rolls:
+- Positive synergy rules (still used by the pure grid helpers):
   - wheat: ≥2 adjacent growing wheat-family crops
   - lettuce: watered/ready and at least one growing neighbor
   - tomato: no tomato neighbors and ≥1 lettuce neighbor
@@ -789,15 +796,14 @@ Hand-harvest vs scythe:
 ### 8.3 Combo system
 
 The combo tracker is **client-side** (`src/world/comboTracker.ts` +
-`ComboController`). Only a boolean-ish mutation multiplier is sent to the
-server.
+`ComboController`). Combo state is not sent to the server anymore.
 
 | Streak | Window | Perk |
 | ---: | --- | --- |
 | 1–4 | 1.5s (plus a one-time +0.4s on hotbar swap) | Tracks streak; badge appears at 3+ |
 | 5–9 | 1.5s | +10% walk speed on farm tiles |
 | 10–14 | 1.5s | 15% chance to spread a water/scythe action to one valid orthogonal neighbor |
-| 15+ | 1.5s | 1.5× rare mutation seed drop multiplier |
+| 15+ | 1.5s | Tracks the highest tier (currently cosmetic; rare crops come from catalysts) |
 
 Higher tiers keep lower-tier perks: 15+ still has the speed bonus and the
 spread chance. `comboTier` picks one label, but `comboPerks` returns them all.
@@ -805,23 +811,33 @@ spread chance. `comboTier` picks one label, but `comboPerks` returns them all.
 Tuning lives in `shared/mechanics.ts` (and is mirrored in `Crops` where the
 server needs it).
 
-### 8.4 Rare mutation drops
+### 8.4 Rare-crop catalysts
 
-Rolled on a mature **standard** crop harvest:
+Standard crops no longer roll rare seeds on harvest. Three consumable items now
+queue an overnight transformation for the player's own farm:
 
-```
-chance = (0.0015 + (synergyActive ? 0.0025 : 0)) * comboMultiplier
-```
+| Catalyst | Standard crop | Rare result |
+| --- | --- | --- |
+| Blizzard Vial | Lettuce | Frost-Crisp Lettuce |
+| Gilded Dust | Wheat | Midas Wheat |
+| Sun Shard | Tomato | Sun-Burst Tomato |
 
-`comboMultiplier` is `1.5` at combo 15+, else `1.0`. Maximum is `0.006` (0.6%).
+Using one consumes it from the owner's `player_items` ledger and inserts a
+`farm_catalysts` row. `FarmCatalysts.next_dawn_ms/1` targets the next day start;
+`FarmStore.tick/1` applies due rows, and a successful sleep calls
+`FarmStore.apply_dawn_catalysts/0` immediately. Applying rewrites every matching
+planted/watered/ready tile to the rare crop, preserving its state and timing
+while resetting the harvest count to the rare crop's full count.
 
-- The **server** rolls in `FarmAction.mutation_drops/5`, persists the drop in the
-  actor's seed inventory, and returns the item ids in the `farmAction` ack.
-- The client does not roll; it reads `drops` from the ack and shows a
-  "Rare <name>!" notice.
-- Sun-Burst Tomato declares a separate 10% bonus seed (`tomato-seed`) in the
-  registry, but nothing rolls it: the server harvest path ignores it and the
-  client has no local harvest simulation.
+The client uses a catalyst by right-clicking its inventory stack or selecting it
+in the hotbar and clicking the world. The server acks with the authoritative
+catalyst counts and broadcasts `catalystApplied` once the dawn transformation
+runs. Catalysts are dev/admin-only for now: admins are granted all three on
+lobby join, and the dev-only `POST /api/dev/item` / `POST /api/dev/dawn` routes
+support manual and e2e testing. Admins also get a temporary creative spawner in
+the inventory modal, backed by `POST /api/admin/item`, to re-grant catalysts and
+other items without reloading. Old rare seed items still exist and can be
+planted if held, but nothing drops them anymore.
 
 ### 8.5 Fences, gates, and props
 
@@ -891,10 +907,10 @@ What visitors may do while `visitor_edit` is on:
 Regardless of editing, visitors may walk around and toggle gates. Selling
 produce, buying livestock, the bank, fishing, and settings are owner-only.
 
-Ownership of the farm state is shared, but seed spending and rare mutation
-drops follow the **actor**, while harvested produce goes to the **owner's**
-barn. `FarmChannel` authorizes against the persisted flags; the client
-`canEditFarm()` helper is only the UI gate.
+Ownership of the farm state is shared, but seed spending follows the **actor**,
+while harvested produce goes to the **owner's** barn. `FarmChannel` authorizes
+against the persisted flags; the client `canEditFarm()` helper is only the UI
+gate.
 
 Private farms are omitted from the dashboard's open-farm list and from the
 train destination menu. They are hidden, not shown as locked rows.
@@ -1185,7 +1201,7 @@ runs Gitleaks.
 
 1. Add the id to `CropId` and a full entry to `CROPS` in `shared/crops.ts`
    (stage filenames, harvested sprite, seed id, costs, harvest tool, harvests,
-   regrow stage, synergy, mutation/bonus fields).
+   regrow stage, synergy, and any bonus fields).
 2. Add the matching stage list and entry to `@crops` in
    `backend/lib/grange/crops.ex`. Keep names, costs, tools, harvest counts, and
    synergy identical.
@@ -1316,12 +1332,11 @@ runs Gitleaks.
    hard-code 5.
 8. **`farms.tomatoes` is legacy.** Harvests write `barn_items`; `view.tomatoes`
    is derived from `barn["tomato"]`. Do not add new writes to the column.
-9. **Rare mutation seeds are server-rolled.** `FarmStore` persists drops in the
-   actor's inventory and returns them in the `farmAction` ack; the client only
-   displays them. Do not re-add a client-side roll.
-10. **The combo tracker is client-only.** The server receives only
-    `comboMutationMultiplier` (1 or 1.5) and maps it to combo count 15 for the
-    drop formula.
+9. **Rare crops come from catalysts.** Standard harvests no longer roll rare
+   seeds. `FarmCatalysts` consumes the owner's catalyst and transforms matching
+   tiles at dawn; old rare seed items remain plantable but drop nowhere.
+10. **The combo tracker is client-only.** No combo state is sent with farm
+    actions; the 15+ tier is currently cosmetic.
 11. **Passive watering / moisture retention is not modeled at all.** `Crops`
     exposes `passive_water` and the client registry exposes the decay
     multiplier, but `FarmStore` does not water neighbors on a tick and the
@@ -1342,8 +1357,10 @@ runs Gitleaks.
     `backend/priv/static/index.html`; `pnpm test:e2e` builds first.
 19. **`vite preview` intentionally mirrors the dev proxy.** Keep both proxy
     blocks in `vite.config.ts` in sync.
-20. **Admin inventory is client-side.** `is_admin` only triggers
-    `grantAllItems()` on sign-in. There is no server-side item authorization.
+20. **Admin inventory is client-side.** `is_admin` triggers `grantAllItems()` on
+    sign-in. The creative spawner's `/api/admin/item` endpoint also checks the
+    flag before persisting items to `player_items`; there is still no general
+    server-side item authorization for ordinary gameplay.
 21. **The server trusts balance deltas.** `POST /api/economy/transaction`
     accepts any integer delta from a logged-in user. Do not treat it as a
     secure economy authority.
@@ -1389,9 +1406,9 @@ runs Gitleaks.
 36. **Visibility and editing are different gates.** `is_public` only controls
     new joins; `visitor_edit` controls actions and is re-read per action.
     Turning a farm private never disconnects current visitors.
-37. **Visitor actions are actor-aware.** Seeds and mutation drops belong to the
-    acting user; harvested produce belongs to the farm owner. Do not collapse
-    actor and owner when adding a new action.
+37. **Visitor actions are actor-aware.** Seeds belong to the acting user;
+    harvested produce belongs to the farm owner. Do not collapse actor and
+    owner when adding a new action.
 38. **Never use Excalibur's `delta` for gameplay timing.** The engine clock
     rewrites any frame longer than 200ms to 1ms, so a starved browser plays in
     slow motion (a 2s train ride or a walk across the farm can take minutes).
@@ -1439,8 +1456,10 @@ them silently as part of an unrelated change; mention them in the PR.
 
 - Settings, whitelist management, and some market tabs (`tools`, `train`) are
   stubs.
-- Rare mutation seeds are persisted server-side, but Sun-Burst Tomato's extra
-  10% seed is declared and never rolled.
+- Sun-Burst Tomato's extra 10% bonus seed is declared in the registry, but
+  harvests no longer roll any rare/bonus seeds.
+- Rare-crop catalysts are dev/admin-only for now (no market or drop source);
+  admins get all three on lobby join and e2e uses the dev grant route.
 - Server-side passive watering for Frost-Crisp Lettuce is not implemented, and
   nothing else models it either (the old client-local simulation is gone).
 - Server growth calculation does not include lettuce moisture retention; the

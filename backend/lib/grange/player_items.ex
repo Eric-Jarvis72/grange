@@ -12,6 +12,18 @@ defmodule Grange.PlayerItems do
 
   alias Grange.{PlayerItem, Repo}
 
+  @catalyst_items ~w(blizzard-vial gilded-dust sun-shard)
+
+  @doc "Every catalyst item id the dev/admin tooling can grant."
+  @spec catalyst_items() :: [String.t()]
+  def catalyst_items, do: @catalyst_items
+
+  @doc "Fills every catalyst stack for an admin account."
+  @spec grant_all_catalysts(String.t()) :: :ok
+  def grant_all_catalysts(owner) do
+    Enum.each(@catalyst_items, &put_count(owner, &1, 99))
+  end
+
   @doc "Adds `count` of `item` to the owner's items, inserting the row if new."
   @spec add(String.t(), String.t(), integer()) :: :ok
   def add(owner, item, count) when is_integer(count) and count > 0 do
@@ -57,6 +69,20 @@ defmodule Grange.PlayerItems do
   @spec reset() :: :ok
   def reset do
     Repo.delete_all(PlayerItem)
+    :ok
+  end
+
+  defp put_count(owner, item, count) do
+    case Repo.get_by(PlayerItem, owner: owner, item: item) do
+      nil ->
+        %PlayerItem{}
+        |> PlayerItem.changeset(%{owner: owner, item: item, count: count})
+        |> Repo.insert!()
+
+      row ->
+        row |> PlayerItem.changeset(%{count: count}) |> Repo.update!()
+    end
+
     :ok
   end
 end

@@ -21,6 +21,7 @@ defmodule GrangeWeb.FarmChannel do
     FarmStore,
     Inventory,
     NpcQuest,
+    PlayerItems,
     SleepVotes,
     WorldPosition
   }
@@ -90,6 +91,15 @@ defmodule GrangeWeb.FarmChannel do
   @impl true
   def handle_in("sellProduce", %{"item" => item, "count" => count}, socket) do
     authorize_owner(socket, fn owner -> sell(socket, owner, item, count) end)
+  end
+
+  @impl true
+  def handle_in("useCatalyst", %{"item" => item}, socket) when is_binary(item) do
+    authorize_owner(socket, fn owner -> use_catalyst(socket, owner, item) end)
+  end
+
+  def handle_in("useCatalyst", _payload, socket) do
+    {:reply, {:error, %{error: "invalid catalyst"}}, socket}
   end
 
   # The farmhand's quest is owner-only: he stands on the owner's farm and
@@ -258,9 +268,8 @@ defmodule GrangeWeb.FarmChannel do
 
   defp act(socket, owner, actor, action) do
     case FarmStore.action(owner, action, actor) do
-      {:ok, farm} ->
-        reply = %{seeds: Inventory.seeds(actor), drops: Map.get(farm, :drops, [])}
-        {:reply, {:ok, reply}, socket}
+      {:ok, _farm} ->
+        {:reply, {:ok, %{seeds: Inventory.seeds(actor)}}, socket}
 
       {:error, reason} ->
         reply = %{error: reason, seeds: Inventory.seeds(actor)}
@@ -286,6 +295,16 @@ defmodule GrangeWeb.FarmChannel do
     case FarmStore.sell(owner, item, count) do
       {:ok, _farm} -> {:reply, :ok, socket}
       {:error, reason} -> {:reply, {:error, %{error: reason}}, socket}
+    end
+  end
+
+  defp use_catalyst(socket, owner, item) do
+    case FarmStore.use_catalyst(owner, item) do
+      {:ok, pending} ->
+        {:reply, {:ok, %{pending: pending, items: PlayerItems.map(owner)}}, socket}
+
+      {:error, reason} ->
+        {:reply, {:error, %{error: reason, items: PlayerItems.map(owner)}}, socket}
     end
   end
 

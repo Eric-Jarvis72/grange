@@ -10,7 +10,7 @@ defmodule Grange.SleepVotes do
 
   use GenServer
 
-  alias Grange.{DayNight, FarmPresence, WorldClock}
+  alias Grange.{DayNight, FarmPresence, FarmStore, WorldClock}
 
   @timeout_ms 30_000
 
@@ -40,7 +40,7 @@ defmodule Grange.SleepVotes do
     users = FarmPresence.active(owner)
 
     if length(users) <= 1 do
-      WorldClock.skip_to_day()
+      skip_to_day()
       broadcast(owner, "sleepResult", %{result: "skipped", initiator: initiator})
       {:reply, {:ok, :skipped}, state}
     else
@@ -161,9 +161,14 @@ defmodule Grange.SleepVotes do
 
   defp finish(state, owner, vote, result) do
     Process.cancel_timer(vote.timer)
-    if result == "accepted", do: WorldClock.skip_to_day()
+    if result == "accepted", do: skip_to_day()
     broadcast(owner, "sleepResult", %{result: result, initiator: vote.initiator})
     {Map.delete(state, owner), String.to_atom(result)}
+  end
+
+  defp skip_to_day do
+    WorldClock.skip_to_day()
+    FarmStore.apply_dawn_catalysts()
   end
 
   defp public(vote) do

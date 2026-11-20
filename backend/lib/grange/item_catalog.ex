@@ -11,6 +11,7 @@ defmodule Grange.ItemCatalog do
   @stackable ~w(
     seed-bag tomato wheat lettuce midas_wheat frost_lettuce sunburst_tomato
     wheat-seed lettuce-seed midas-wheat-seed frost-lettuce-seed sunburst-tomato-seed
+    blizzard-vial gilded-dust sun-shard
     fence gate farmhouse barn well bench sign barrel crate oak-tree pine-tree apple-tree
     daisies marigolds blue-flowers sprinkler
     cow hen sheep pig

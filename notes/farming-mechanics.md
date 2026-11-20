@@ -7,14 +7,14 @@ If you change a value, change it in both places and update this table.
 
 ## 1. Crops & Rare Variants
 
-| Crop Name | ID | Tier | Stages | Seed Cost | Sell Value | Harvest Tool | Regrowth | Unique Grid Mechanic (Orthogonal `N, S, E, W`) | Synergy Condition (for Mutation Bonus) |
+| Crop Name | ID | Tier | Stages | Seed Cost | Sell Value | Harvest Tool | Regrowth | Unique Grid Mechanic (Orthogonal `N, S, E, W`) | Synergy Condition |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- | :--- |
 | **Wheat** | `wheat` | Standard | 5 (`0`–`4`) | 2c | 4c | **Scythe Only** | Single harvest | **Pack Mentality:** `+5%` growth speed per adjacent Wheat/Midas Wheat (max `+20%`). | Adjacent to `>= 2` Wheat tiles |
 | **Lettuce** | `lettuce` | Standard | 5 (`0`–`4`) | 4c | 7c | Hand or Scythe | Single harvest | **Moisture Sponge:** while watered, its 4 orthogonal neighbors decay moisture `25%` slower. | Hydrating `>= 1` adjacent crop |
 | **Tomato** | `tomato` | Standard | 5 (`0`–`4`) | 8c | 5c *(x2 = 10c)* | Hand or Scythe | `2` harvests *(regrows from Stage `2`)* | **Space-Hungry:** `-20%` growth speed if touching any Tomato; `+15%` growth speed if touching any Lettuce. | Adjacent to `>= 1` Lettuce and `0` Tomatoes |
-| **Midas Wheat** | `midas_wheat` | Rare Mutant | 4 (`0`–`3`) | *Drop Only* | 10c | **Scythe Only** | Single harvest | **Combo Booster:** grants `+3` to `comboCount` and refreshes the timer on harvest. Counts toward Wheat adjacency. | *N/A (Mutant)* |
-| **Frost-Crisp Lettuce** | `frost_lettuce` | Rare Mutant | 4 (`0`–`3`) | *Drop Only* | 15c | Hand or Scythe | Single harvest | **Living Sprinkler:** while left unharvested at Stage `3`, waters all 4 orthogonal neighbors at the start of each cycle. | *N/A (Mutant)* |
-| **Sun-Burst Tomato** | `sunburst_tomato` | Rare Mutant | 3 (`0`–`2`) | *Drop Only* | 8c *(x3 = 24c)* | Hand or Scythe | `3` harvests *(regrows from Stage `1`)* | **Self-Seeding:** `10%` chance on each harvest to drop `1` bonus standard `tomato_seed`. | *N/A (Mutant)* |
+| **Midas Wheat** | `midas_wheat` | Rare Catalyst | 4 (`0`–`3`) | *Catalyst Only* | 30c | **Scythe Only** | Single harvest | **Combo Booster:** grants `+3` to `comboCount` and refreshes the timer on harvest. Counts toward Wheat adjacency. | *N/A (Mutant)* |
+| **Frost-Crisp Lettuce** | `frost_lettuce` | Rare Catalyst | 4 (`0`–`3`) | *Catalyst Only* | 45c | Hand or Scythe | Single harvest | **Living Sprinkler:** while left unharvested at Stage `3`, waters all 4 orthogonal neighbors at the start of each cycle. | *N/A (Mutant)* |
+| **Sun-Burst Tomato** | `sunburst_tomato` | Rare Catalyst | 3 (`0`–`2`) | *Catalyst Only* | 24c *(x3 = 72c)* | Hand or Scythe | `3` harvests *(regrows from Stage `1`)* | **Self-Seeding:** the registry declares a `10%` bonus seed roll, but the harvest path does not apply it yet. | *N/A (Mutant)* |
 
 Harvest tool notes:
 
@@ -32,32 +32,55 @@ Harvest tool notes:
 Valid farming actions (**Till**, **Plant**, **Water**, **Harvest**) increment
 `comboCount` by `+1` and reset the decay timer. Clicking invalid or
 already-watered tiles does not increment the combo. The tracker is **client
-side** (`src/world/comboTracker.ts`); only the mutation multiplier is sent with
-a harvest.
+side** (`src/world/comboTracker.ts`); combo state is not sent with actions.
 
 | Combo Streak | Timer Window | Active Gameplay Perk |
 | :---: | :---: | :--- |
 | **1x – 4x** | `1.5s` decay *(`+0.4s` once per hotbar swap on a different action)* | Tracks streak; combo badge appears at `3x+`. |
 | **5x – 9x** | `1.5s` decay | **+10% player walk speed** while on farm tiles. |
 | **10x – 14x** | `1.5s` decay | **15% splash/cleave chance** when watering or scything to affect 1 valid orthogonal neighbor. |
-| **15x+** | `1.5s` decay | **1.5x multiplier** applied to Rare Mutation Seed drop rolls on harvest. |
+| **15x+** | `1.5s` decay | Tracks the highest tier (currently cosmetic; rare crops come from catalysts). |
 
-## 3. Rare Mutation Seed Drop Rates
+## 3. Rare-Crop Catalysts
 
-Rolled whenever a **Standard Crop** (`wheat`, `lettuce`, `tomato`) is harvested
-at its Mature stage:
+Standard crops no longer roll rare seeds on harvest. Instead, three consumable
+catalyst items queue an overnight transformation on the player's own farm:
 
-| Roll Condition | Formula / Modifier | Effective Drop Chance | Approx. Odds |
-| :--- | :---: | :---: | :---: |
-| **Base Harvest** *(No active synergy, Combo < 15x)* | `Base` | **0.15%** | ~1 in 667 |
-| **Base Harvest + 15x Combo** *(No active synergy)* | `0.15% * 1.5` | **0.225%** | ~1 in 444 |
-| **Active Grid Synergy** *(Combo < 15x)* | `0.15% + 0.25%` | **0.40%** | 1 in 250 |
-| **Optimal Harvest** *(Active Synergy + 15x Combo)* | `(0.15% + 0.25%) * 1.5` | **0.60%** | ~1 in 167 |
+| Catalyst | Standard crop | Rare result |
+| :--- | :--- | :--- |
+| **Blizzard Vial** | Lettuce | Frost-Crisp Lettuce |
+| **Gilded Dust** | Wheat | Midas Wheat |
+| **Sun Shard** | Tomato | Sun-Burst Tomato |
 
-Dropped seeds (`midas_wheat_seed`, `frost_lettuce_seed`,
-`sunburst_tomato_seed`) currently land in the **local, session-scoped**
-inventory and are not yet persisted server-side. The same roll is mirrored on
-the server (`Grange.FarmAction.mutation_drops/5`) so the logic stays in sync.
+- Using a catalyst consumes one from the owner's durable `player_items` ledger
+  and records a pending `farm_catalysts` row.
+- The transformation runs at the next dawn: `FarmStore.tick/1` applies due
+  rows, and a successful sleep jumps to the next morning immediately.
+- Every matching planted, watered, or ready tile is rewritten to the rare crop.
+  Tile state and timestamps are preserved; the harvest counter resets to the
+  rare crop's full count.
+- Catalysts are currently dev/admin-only. Admins are granted all three on lobby
+  join, and the dev-only `POST /api/dev/item` / `POST /api/dev/dawn` routes grant
+  and force them for testing.
+- Old rare seed items still exist and can be planted if held, but nothing drops
+  them anymore.
+
+### Temporary admin access
+
+Admins are normal accounts with `users.is_admin = true`. They receive the full
+item catalog on sign-in, effectively unlimited Grangecoin, and an **Admin
+Spawner** at the bottom of the inventory modal.
+
+- Create or promote an admin account in development:
+  `pnpm admin:create`. The defaults are username `admin`, password
+  `grange-admin`, and email `admin@grange.test`.
+- Choose your own account:
+  `node scripts/run-mix.mjs grange.create_admin --username YourName --email you@example.test --password long-enough`.
+- Promote an already signed-in dev account with `POST /api/dev/admin`, then
+  reload.
+- The inventory spawner grants any catalog item locally. Catalyst spawns use
+  `POST /api/admin/item`, which checks the admin flag and keeps the
+  `player_items` ledger authoritative.
 
 ## 4. Barn, Economy & Market
 
@@ -76,7 +99,7 @@ the production release.
   transaction.
 - The market's **Produce** stall sells each of the six produce items at
   `CROPS[*].sellValue`: wheat `4c`, lettuce `7c`, tomato `5c`, Midas Wheat
-  `10c`, Frost-Crisp Lettuce `15c`, Sun-Burst Tomato `8c`.
+  `30c`, Frost-Crisp Lettuce `45c`, Sun-Burst Tomato `24c`.
 - Selling decrements the barn row; the client reconciles its inventory to the
   barn on every farm snapshot, so a sold item disappears from the inventory too.
 - The client economy balance is mirrored to `users.balance` via
@@ -92,6 +115,7 @@ the production release.
 | **Midas Wheat** | `/assets/crops/midas_wheat_*.webp` | `0_seed`, `1_sprout`, `2_radiant`, `3_mature`, `harvested` |
 | **Lettuce Sprites** | `/assets/crops/lettuce_*.webp` | `0_seed`, `1_sprout`, `2_leaf`, `3_loose`, `4_mature`, `harvested` |
 | **Frost-Crisp Lettuce** | `/assets/crops/frost_lettuce_*.webp` | `0_seed`, `1_sprout`, `2_young`, `3_mature`, `harvested` |
+| **Catalysts** | `/assets/*_Catalyst.{png,webp}` | `Frost_Catalyst.png`, `Midas_Catalyst.png`, `Sunburst_Catalyst.webp` |
 | **Scythes & FX** | `/assets/tools/*.webp` | `scythe_basic`, `scythe_iron`, `scythe_runed`, `sweep_fx_0`, `sweep_fx_1`, `sweep_fx_2` |
 | **Fences & Gates** | `/assets/farm/fences/*.webp` | `post`, `rail-horizontal`, `rail-vertical`, and four `gate-{closed,open}-{horizontal,vertical}` variants |
 
@@ -120,15 +144,18 @@ The old placeholders (`farm/plants/tomato-plant.webp`, `farm/plants/wheat.webp`,
 | Concern | File(s) |
 | :--- | :--- |
 | Crop registry, stage sprites, economy | `shared/crops.ts` |
-| Combo tiers, synergy bonuses, mutation formula | `shared/mechanics.ts` |
+| Combo tiers and synergy bonuses | `shared/mechanics.ts` |
 | Tile model, neighbours, crop encode/decode | `shared/farm.ts` |
 | Server farm simulation | `backend/lib/grange/farm.ex`, `farm_store.ex`, `farm_tick.ex` |
+| Overnight catalysts | `backend/lib/grange/farm_catalyst.ex`, `farm_catalysts.ex` |
+| Catalyst activation + notices | `src/inventory/catalystUse.ts`, `src/world/catalystMessages.ts` |
+| Admin creative spawner | `src/inventory/AdminSpawner.tsx`, `POST /api/admin/item` |
 | Crop + sweep rendering, resource loading | `src/world/cropLayer.ts`, `resources.ts`, `sweepFx.ts` |
 | Combo tracker + HUD counter | `src/world/comboTracker.ts`, `farmCombo.ts`, `ComboCounter.tsx` |
 | Action resolution + barn reconciler | `src/world/farmActions.ts`, `barnSync.ts` |
 | Market data + controls | `src/world/marketData.ts`, `useFarmMarket.ts` |
 | Server crop registry | `backend/lib/grange/crops.ex` |
-| Server action parsing + drop roll | `backend/lib/grange/farm_action.ex` |
+| Server action parsing | `backend/lib/grange/farm_action.ex` |
 | Fence/gate graph, collision, rendering | `src/world/fenceData.ts`, `fenceRendering.ts`, `sceneObstacles.ts` |
 | Gate placement, E interaction, prompts | `src/world/fenceActions.ts`, `gateInteraction.ts`, `FarmMapScene.ts` |
 | Server barn + harvest/regrow/sell | `backend/lib/grange/farm_store.ex`, `barn_item.ex` |

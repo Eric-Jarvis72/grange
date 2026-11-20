@@ -1,7 +1,7 @@
 /**
- * Tuning for the arcade farming layer: the combo tracker, grid synergy growth
- * modifiers, and rare-mutation seed drops. Kept apart from the crop registry so
- * balance changes read as one list.
+ * Tuning for the arcade farming layer: the combo tracker and grid synergy
+ * growth modifiers. Kept apart from the crop registry so balance changes read
+ * as one list.
  */
 
 /** Combo expires this long after the last valid action. */
@@ -17,11 +17,6 @@ export const COMBO_SPREAD_TIER = 10;
 export const COMBO_SPREAD_CHANCE = 0.15;
 export const COMBO_MUTATION_TIER = 15;
 export const COMBO_MUTATION_MULTIPLIER = 1.5;
-
-/** Base rare-mutation drop chance on a mature standard-crop harvest. */
-export const MUTATION_BASE_CHANCE = 0.0015;
-/** Added when the harvested crop has its positive neighbour synergy active. */
-export const MUTATION_SYNERGY_BONUS = 0.0025;
 
 /** Wheat "pack mentality": +5% growth speed per adjacent wheat, capped at +20%. */
 export const WHEAT_PACK_PER_NEIGHBOR = 0.05;
@@ -57,18 +52,6 @@ export function comboSpreadChance(comboCount: number): number {
 
 export function comboMutationMultiplier(comboCount: number): number {
 	return comboTier(comboCount) === "mutation" ? COMBO_MUTATION_MULTIPLIER : 1;
-}
-
-/**
- * Rare seed drop chance for a mature standard harvest. Synergy and combo are
- * the only modifiers, capping at (base + synergy) * 1.5 = 0.6%.
- */
-export function mutationChance(
-	comboCount: number,
-	synergyActive: boolean,
-): number {
-	const bonus = synergyActive ? MUTATION_SYNERGY_BONUS : 0;
-	return (MUTATION_BASE_CHANCE + bonus) * comboMutationMultiplier(comboCount);
 }
 
 /** Effects of a combo bonus applied outward from a tile action. */
@@ -124,9 +107,7 @@ export function cycleTimeNow(
 	time: WorldTime,
 	nowMs: number = Date.now(),
 ): number {
-	return normalizeCycleTime(
-		time.cycle_time_ms + (nowMs - time.server_time_ms),
-	);
+	return normalizeCycleTime(time.cycle_time_ms + (nowMs - time.server_time_ms));
 }
 
 export function dayPhaseNow(

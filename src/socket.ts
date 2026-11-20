@@ -13,9 +13,12 @@ import { useGameStore } from "./store";
 
 /** Session token used to authenticate the socket handshake. */
 let authToken: string | null = null;
+/** The latest durable item map from the lobby join reply. */
+let serverItems: Record<string, number> | null = null;
 
 export function setAuthToken(token: string | null): void {
 	authToken = token;
+	if (!token) serverItems = null;
 }
 
 /** Single shared connection for the whole SPA. */
@@ -35,9 +38,19 @@ export interface FarmAck extends Ack {
 /** Reply to a successful farm action, carrying authoritative seed state. */
 export interface FarmActionAck extends Ack {
 	seeds?: Record<string, number>;
-	drops?: string[];
 	npc?: NpcQuestStatus;
 	balance?: number;
+}
+
+/** Reply to a catalyst use, carrying the queued dawn or an error. */
+export interface CatalystAck extends Ack {
+	pending?: {
+		item: string;
+		standard: string;
+		crop: string;
+		applies_at: number;
+	};
+	items?: Record<string, number>;
 }
 
 export interface FarmSettings {
@@ -59,18 +72,28 @@ export function reasonOf(payload: unknown): string | undefined {
 }
 
 /**
- * Mirrors the server's durable rods and fish into the local inventory. The
- * server is the source of truth for those items, so they come back after a
- * reload or on a new browser.
+ * Mirrors the server's durable rods, fish, and catalysts into the local
+ * inventory. The server is the source of truth for those items, so they come
+ * back after a reload or on a new browser.
  */
 function applyServerItems(items: Record<string, number> | undefined): void {
 	if (!items) return;
+	serverItems = items;
 	reconcileServerItems(items, {
 		addItem: (itemId, count) =>
 			useInventoryStore.getState().addItem(itemId, count),
 		countItem: (itemId) => countItem(useInventoryStore.getState(), itemId),
 	});
 }
+
+// The lobby can reply before `/api/inventory` finishes hydrating the saved
+// layout. Re-apply the durable items after that hydration so it cannot clobber
+// a freshly granted catalyst, rod, or fish.
+useInventoryStore.subscribe((state, previous) => {
+	if (!previous.inventorySynced && state.inventorySynced && serverItems) {
+		applyServerItems(serverItems);
+	}
+});
 
 function joinLobby(): Channel {
 	if (lobby) return lobby;

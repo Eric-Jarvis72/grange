@@ -1,15 +1,9 @@
-import type { CropId } from "../../shared/crops";
+import type { CatalystItemId, CropId } from "../../shared/crops";
 import type { FarmToolId } from "../../shared/farm";
-import {
-	FISH,
-	FISH_ORDER,
-	type FishId,
-	RODS,
-	ROD_ORDER,
-	type RodId,
-} from "../world/fishingData";
+import type { FishId, RodId } from "../world/fishingData";
 import type { MovablePropKey } from "../world/mapData";
 import type { AnimalId } from "../world/livestockData";
+import { CATALYST_ITEMS, FISH_ITEMS, ROD_ITEMS } from "./specialItems";
 
 export type ItemId =
 	| "hoe"
@@ -22,6 +16,7 @@ export type ItemId =
 	| "midas_wheat"
 	| "frost_lettuce"
 	| "sunburst_tomato"
+	| CatalystItemId
 	| "wheat-seed"
 	| "lettuce-seed"
 	| "midas-wheat-seed"
@@ -36,7 +31,14 @@ export type ItemId =
 	| FishId
 	| MovablePropKey;
 
-export type ItemKind = "tool" | "seed" | "crop" | "fish" | "building" | "animal";
+export type ItemKind =
+	| "tool"
+	| "seed"
+	| "crop"
+	| "fish"
+	| "building"
+	| "animal"
+	| "catalyst";
 
 export interface ItemDef {
 	id: ItemId;
@@ -48,37 +50,10 @@ export interface ItemDef {
 	description: string;
 }
 
-/** Fishing rods are single-stack tools; their icon and blurb come from RODS. */
-function rodItem(id: RodId): ItemDef {
-	return {
-		id,
-		name: RODS[id].name,
-		kind: "tool",
-		maxStack: 1,
-		icon: RODS[id].icon,
-		description: RODS[id].blurb,
-	};
-}
-
-/** Caught fish are stackable inventory items; their emoji stands in for art. */
-function fishItem(id: FishId): ItemDef {
-	return {
-		id,
-		name: FISH[id].name,
-		kind: "fish",
-		maxStack: 99,
-		icon: FISH[id].emoji,
-		description: FISH[id].blurb,
-	};
-}
-
 export const ITEMS: Record<ItemId, ItemDef> = {
-	...(Object.fromEntries(
-		ROD_ORDER.map((id) => [id, rodItem(id)]),
-	) as Record<RodId, ItemDef>),
-	...(Object.fromEntries(
-		FISH_ORDER.map((id) => [id, fishItem(id)]),
-	) as Record<FishId, ItemDef>),
+	...ROD_ITEMS,
+	...FISH_ITEMS,
+	...CATALYST_ITEMS,
 	hoe: {
 		id: "hoe",
 		name: "Hoe",

@@ -24,6 +24,9 @@ defmodule Grange.FarmStore do
     FarmAnimal,
     FarmAnimals,
     FarmBootstrap,
+    FarmBroadcast,
+    FarmCatalyst,
+    FarmCatalysts,
     FarmFence,
     FarmFences,
     FarmGate,
@@ -46,12 +49,10 @@ defmodule Grange.FarmStore do
     Tile
   }
 
-  @lobby_topic "lobby"
-
   @spec ensure(String.t()) :: map()
   def ensure(owner) do
     case FarmBootstrap.ensure(owner) do
-      :created -> broadcast_change(owner)
+      :created -> FarmBroadcast.change(owner)
       :existing -> :ok
     end
 
@@ -110,8 +111,8 @@ defmodule Grange.FarmStore do
   Runs an action on `owner`'s farm on behalf of `actor`.
 
   Owners and visitors with edit permission share the same farm state, but seed
-  spending and mutation drops follow the actor so a visitor cannot consume the
-  owner's seed ledger.
+  spending follows the actor so a visitor cannot consume the owner's seed
+  ledger.
   """
   @spec action(String.t(), map(), String.t()) :: {:ok, map()} | {:error, String.t()}
   def action(owner, action, actor) when is_binary(actor) do
@@ -144,7 +145,7 @@ defmodule Grange.FarmStore do
   @doc "Broadcasts the farm and returns its refreshed view."
   @spec refresh(String.t()) :: {:ok, map()}
   def refresh(owner) do
-    broadcast_change(owner)
+    FarmBroadcast.change(owner)
     {:ok, view(owner)}
   end
 
@@ -155,11 +156,35 @@ defmodule Grange.FarmStore do
 
   def sell(_owner, _item, _count), do: {:error, "invalid sale"}
 
+  @doc "Consumes one overnight catalyst and queues its dawn transformation."
+  @spec use_catalyst(String.t(), String.t()) :: {:ok, map()} | {:error, String.t()}
+  def use_catalyst(owner, item), do: FarmCatalysts.schedule(owner, item)
+
+  @doc "Applies every pending catalyst, e.g. when sleep skips the night."
+  @spec apply_dawn_catalysts() :: [map()]
+  def apply_dawn_catalysts do
+    results = FarmCatalysts.apply_all()
+    owners = results |> Enum.map(& &1.owner) |> Enum.uniq() |> Enum.sort()
+
+    FarmBroadcast.catalysts(results)
+    Enum.each(owners, &FarmBroadcast.farm/1)
+    if owners != [], do: FarmBroadcast.lobby()
+    results
+  end
+
   @spec tick(integer()) :: [String.t()]
   def tick(now \\ System.system_time(:millisecond)) do
-    owners = FarmTick.run(now)
-    Enum.each(owners, &broadcast_farm/1)
-    if owners != [], do: broadcast_lobby()
+    field_owners = FarmTick.run(now)
+    catalyst_results = FarmCatalysts.apply_due(now)
+    FarmBroadcast.catalysts(catalyst_results)
+
+    owners =
+      (field_owners ++ Enum.map(catalyst_results, & &1.owner))
+      |> Enum.uniq()
+      |> Enum.sort()
+
+    Enum.each(owners, &FarmBroadcast.farm/1)
+    if owners != [], do: FarmBroadcast.lobby()
     owners
   end
 
@@ -172,6 +197,7 @@ defmodule Grange.FarmStore do
       PlayerItem,
       InventoryItem,
       InventorySlot,
+      FarmCatalyst,
       FarmFence,
       FarmGate,
       FarmSprinkler,
@@ -192,10 +218,6 @@ defmodule Grange.FarmStore do
 
   defp apply_action(owner, actor, kind, x, y, opts) do
     case Repo.transaction(fn -> mutate_or_rollback(owner, actor, kind, x, y, opts) end) do
-      {:ok, {:drops, drops}} ->
-        broadcast_change(owner)
-        {:ok, Map.put(view(owner), :drops, drops)}
-
       {:ok, :ok} ->
         refresh(owner)
 
@@ -271,7 +293,7 @@ defmodule Grange.FarmStore do
   defp transform(owner, _actor, tile, :water, _opts),
     do: FieldWater.water(owner, tile, now_ms())
 
-  defp transform(owner, actor, tile, :harvest, opts) do
+  defp transform(owner, _actor, tile, :harvest, opts) do
     {crop_id, remaining} = Crops.parse_crop(tile.crop)
 
     cond do
@@ -280,11 +302,7 @@ defmodule Grange.FarmStore do
 
       Crops.can_harvest?(crop_id, opts[:tool]) ->
         Barn.add(owner, crop_id, 1)
-        families = FieldWater.neighbor_families(owner, tile.x, tile.y)
-        drops = FarmAction.mutation_drops(crop_id, tile.state, families, opts, :rand.uniform())
-        Enum.each(drops, &Inventory.add(actor, &1, 1))
         regrow_or_clear(owner, tile, crop_id, remaining)
-        {:drops, drops}
 
       true ->
         {:error, "#{Crops.get(crop_id).name} needs a scythe"}
@@ -365,18 +383,6 @@ defmodule Grange.FarmStore do
 
   defp tile_at(owner, x, y) do
     Repo.one(from(t in Tile, where: t.owner == ^owner and t.x == ^x and t.y == ^y))
-  end
-
-  defp broadcast_change(owner) do
-    broadcast_farm(owner)
-    broadcast_lobby()
-  end
-
-  defp broadcast_farm(owner),
-    do: GrangeWeb.Endpoint.broadcast("farm:" <> owner, "farmUpdate", %{farm: view(owner)})
-
-  defp broadcast_lobby do
-    GrangeWeb.Endpoint.broadcast(@lobby_topic, "farms", %{farms: summaries()})
   end
 
   defp now_ms, do: System.system_time(:millisecond)

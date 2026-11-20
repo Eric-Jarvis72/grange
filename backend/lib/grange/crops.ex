@@ -4,15 +4,13 @@ defmodule Grange.Crops do
 
   The browser owns the authoritative combo tracker; the backend keeps the same
   crop definitions, growth-stage counts, harvest requirements, neighbour
-  synergy, and rare-mutation drop formula so the two stay in step. Everything
+  synergy, and overnight catalyst targets so the two stay in step. Everything
   here is pure and unit-testable without a database.
   """
 
   @type crop_id :: String.t()
   @type tool :: :hand | :scythe
 
-  @base_mutation_chance 0.0015
-  @synergy_mutation_bonus 0.0025
   @combo_mutation_multiplier 1.5
   @combo_mutation_tier 15
   @combo_speed_tier 5
@@ -21,6 +19,12 @@ defmodule Grange.Crops do
   @combo_spread_chance 0.15
   @combo_window_ms 1_500
   @combo_swap_grace_ms 400
+
+  @catalysts %{
+    "blizzard-vial" => %{standard: "lettuce", rare: "frost_lettuce"},
+    "gilded-dust" => %{standard: "wheat", rare: "midas_wheat"},
+    "sun-shard" => %{standard: "tomato", rare: "sunburst_tomato"}
+  }
 
   @wheat ~w(wheat_0_seed.webp wheat_1_sprout.webp wheat_2_young.webp wheat_3_golden.webp wheat_4_mature.webp)
   @lettuce ~w(lettuce_0_seed.webp lettuce_1_sprout.webp lettuce_2_leaf.webp lettuce_3_loose.webp lettuce_4_mature.webp)
@@ -40,8 +44,7 @@ defmodule Grange.Crops do
       harvest_tool: :scythe,
       harvests: 1,
       regrow_stage: -1,
-      synergy: :pack,
-      mutation_seed: "midas-wheat-seed"
+      synergy: :pack
     },
     "lettuce" => %{
       name: "Lettuce",
@@ -53,8 +56,7 @@ defmodule Grange.Crops do
       harvest_tool: :both,
       harvests: 1,
       regrow_stage: -1,
-      synergy: :moisture,
-      mutation_seed: "frost-lettuce-seed"
+      synergy: :moisture
     },
     "tomato" => %{
       name: "Tomato",
@@ -66,8 +68,7 @@ defmodule Grange.Crops do
       harvest_tool: :hand,
       harvests: 2,
       regrow_stage: 2,
-      synergy: :space,
-      mutation_seed: "sunburst-tomato-seed"
+      synergy: :space
     },
     "midas_wheat" => %{
       name: "Midas Wheat",
@@ -75,7 +76,7 @@ defmodule Grange.Crops do
       harvested: "midas_wheat_harvested.webp",
       seed: "midas-wheat-seed",
       seed_cost: 0,
-      sell_value: 10,
+      sell_value: 30,
       harvest_tool: :scythe,
       harvests: 1,
       regrow_stage: -1,
@@ -88,7 +89,7 @@ defmodule Grange.Crops do
       harvested: "frost_lettuce_harvested.webp",
       seed: "frost-lettuce-seed",
       seed_cost: 0,
-      sell_value: 15,
+      sell_value: 45,
       harvest_tool: :both,
       harvests: 1,
       regrow_stage: -1,
@@ -101,7 +102,7 @@ defmodule Grange.Crops do
       harvested: "sunburst_tomato_harvested.webp",
       seed: "sunburst-tomato-seed",
       seed_cost: 0,
-      sell_value: 8,
+      sell_value: 24,
       harvest_tool: :hand,
       harvests: 3,
       regrow_stage: 1,
@@ -120,6 +121,17 @@ defmodule Grange.Crops do
 
   @spec standard_ids() :: [crop_id()]
   def standard_ids, do: ["wheat", "lettuce", "tomato"]
+
+  @doc "Every overnight catalyst keyed by the item id the player uses."
+  @spec catalysts() :: map()
+  def catalysts, do: @catalysts
+
+  @doc "The standard/rare crop pair a catalyst transforms, or nil."
+  @spec catalyst(String.t()) :: %{standard: crop_id(), rare: crop_id()} | nil
+  def catalyst(item), do: Map.get(@catalysts, item)
+
+  @spec catalyst?(term()) :: boolean()
+  def catalyst?(item), do: is_map_key(@catalysts, item)
 
   @spec id?(term()) :: boolean()
   def id?(id), do: is_map_key(@crops, id)
@@ -218,8 +230,8 @@ defmodule Grange.Crops do
   end
 
   @doc """
-  Positive neighbour synergy for the mutation bonus, given the tile state and
-  the growing neighbours' families.
+  Positive neighbour synergy for the old mutation bonus. Kept as a pure grid
+  helper even though catalysts now drive rare variants.
   """
   @spec synergy_active?(crop_id(), atom(), [atom()]) :: boolean()
   def synergy_active?(id, state, neighbor_families) do
@@ -263,26 +275,4 @@ defmodule Grange.Crops do
 
   @spec combo_swap_grace_ms() :: pos_integer()
   def combo_swap_grace_ms, do: @combo_swap_grace_ms
-
-  # --- rare mutations -------------------------------------------------------
-
-  @doc "Rare-seed drop chance, capped at (base + synergy) * 1.5 = 0.6%."
-  @spec mutation_chance(pos_integer(), boolean()) :: float()
-  def mutation_chance(combo_count, synergy_active) do
-    bonus = if synergy_active, do: @synergy_mutation_bonus, else: 0.0
-    (base_chance() + bonus) * combo_mutation_multiplier(combo_count)
-  end
-
-  @spec base_chance() :: float()
-  def base_chance, do: @base_mutation_chance
-
-  @doc """
-  Rolls for a mature standard harvest's rare seed. `roll` is a float in `0..1`
-  so callers (and tests) can inject determinism.
-  """
-  @spec mutation_drop(crop_id(), pos_integer(), boolean(), float()) :: String.t() | nil
-  def mutation_drop(id, combo_count, synergy_active, roll) do
-    seed = get(id)[:mutation_seed]
-    if seed && roll < mutation_chance(combo_count, synergy_active), do: seed
-  end
 end

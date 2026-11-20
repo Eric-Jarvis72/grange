@@ -1,9 +1,11 @@
 defmodule Grange.PlayerItem do
   @moduledoc """
-  One row of a player's personal inventory: a fishing rod or a caught fish.
+  One row of a player's personal inventory: a fishing rod, a caught fish, or a
+  rare-crop catalyst.
 
-  Rods are held one at a time (count 1); fish stack. Item ids are rod ids such
-  as `"bamboo"` or fish ids such as `"minnow"`, matching the SPA's `ItemId`.
+  Rods are held one at a time (count 1); fish and catalysts stack. Item ids are
+  rod ids such as `"bamboo"`, fish ids such as `"minnow"`, or catalyst ids such
+  as `"sun-shard"`, matching the SPA's `ItemId`.
   """
 
   use Ecto.Schema

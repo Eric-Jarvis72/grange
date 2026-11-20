@@ -2,7 +2,7 @@ defmodule GrangeWeb.InventoryControllerTest do
   @moduledoc false
   use GrangeWeb.ConnCase, async: false
 
-  alias Grange.{Accounts, AuthToken, FarmStore}
+  alias Grange.{Accounts, AuthToken, FarmStore, Repo}
 
   @alice %{
     "username" => "Alice",
@@ -117,5 +117,39 @@ defmodule GrangeWeb.InventoryControllerTest do
       |> json_post("/api/inventory/buy", %{"item" => "midas-wheat-seed", "quantity" => 1})
 
     assert %{"ok" => false, "error" => "unknown seed"} = json_response(conn, 400)
+  end
+
+  test "the admin spawner grants catalyst items" do
+    conn = register_and_verify()
+    user = Accounts.find_by_email(@alice["email"])
+
+    user
+    |> Ecto.Changeset.change(is_admin: true)
+    |> Repo.update!()
+
+    conn =
+      conn
+      |> recycle()
+      |> json_post("/api/admin/item", %{"item" => "sun-shard", "count" => 2})
+
+    assert %{"ok" => true, "count" => 2, "items" => %{"sun-shard" => 2}} =
+             json_response(conn, 200)
+  end
+
+  test "the admin spawner rejects non-admins and unknown items" do
+    conn = register_and_verify() |> recycle()
+
+    conn = json_post(conn, "/api/admin/item", %{"item" => "sun-shard", "count" => 1})
+    assert %{"ok" => false, "error" => "admin only"} = json_response(conn, 403)
+
+    user = Accounts.find_by_email(@alice["email"])
+    user |> Ecto.Changeset.change(is_admin: true) |> Repo.update!()
+
+    conn =
+      conn
+      |> recycle()
+      |> json_post("/api/admin/item", %{"item" => "not-an-item", "count" => 1})
+
+    assert %{"ok" => false, "error" => "invalid item"} = json_response(conn, 400)
   end
 end

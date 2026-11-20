@@ -12,8 +12,8 @@ export function cropIdOf(tile: FarmTile): CropId {
 
 /**
  * Owns the combo chain and its side effects: mirroring the count into the HUD
- * store and granting harvest bonuses. Rare-seed drops are rolled by the server
- * and delivered with the action ack, not generated here.
+ * store and granting harvest bonuses. Rare crops now come from catalyst items,
+ * so harvesting no longer rolls mutation drops here or on the server.
  */
 export class ComboController {
 	private readonly tracker = new ComboTracker();
@@ -25,10 +25,6 @@ export class ComboController {
 
 	get moveSpeed(): number {
 		return this.tracker.perks().moveSpeed;
-	}
-
-	get mutationMultiplier(): number {
-		return this.tracker.perks().mutationMultiplier;
 	}
 
 	noteHotbarSwap(): void {

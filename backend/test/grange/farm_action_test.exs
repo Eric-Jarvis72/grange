@@ -4,27 +4,13 @@ defmodule Grange.FarmActionTest do
 
   alias Grange.FarmAction
 
-  test "opts/1 normalises crop, tool, and combo fields" do
-    opts = %{"crop" => "wheat", "tool" => "scythe", "comboMutationMultiplier" => 1.5}
-    assert FarmAction.opts(opts) == %{crop: "wheat", animal: nil, tool: :scythe, combo: 1.5}
-    assert FarmAction.opts(%{}) == %{crop: nil, animal: nil, tool: nil, combo: nil}
+  test "opts/1 normalises crop, animal, and tool fields" do
+    opts = %{"crop" => "wheat", "tool" => "scythe"}
+    assert FarmAction.opts(opts) == %{crop: "wheat", animal: nil, tool: :scythe}
+    assert FarmAction.opts(%{}) == %{crop: nil, animal: nil, tool: nil}
     assert FarmAction.opts(%{"crop" => "bogus", "tool" => "fork"})[:crop] == nil
     assert FarmAction.opts(%{"animal" => "hen"})[:animal] == "hen"
     assert FarmAction.opts(%{"animal" => "pig"})[:animal] == "pig"
     assert FarmAction.opts(%{"animal" => "dragon"})[:animal] == nil
-  end
-
-  test "combo_count maps the multiplier into a tier count" do
-    assert FarmAction.combo_count(%{combo: 1.5}) == 15
-    assert FarmAction.combo_count(%{combo: 1.0}) == 0
-    assert FarmAction.combo_count(%{}) == 0
-  end
-
-  test "mutation_drops only fires for standard crops" do
-    assert FarmAction.mutation_drops("lettuce", :ready, [], %{combo: 1.5}, 0.0) ==
-             ["frost-lettuce-seed"]
-
-    assert FarmAction.mutation_drops("midas_wheat", :ready, [], %{combo: 1.5}, 0.0) == []
-    assert FarmAction.mutation_drops("lettuce", :ready, [], %{}, 0.999) == []
   end
 end

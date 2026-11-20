@@ -8,7 +8,7 @@ defmodule GrangeWeb.DevController do
 
   use Phoenix.Controller, formats: [:json]
 
-  alias Grange.{Accounts, Barn, Crops, FarmStore, NpcQuest}
+  alias Grange.{Accounts, Barn, Crops, FarmStore, NpcQuest, PlayerItems}
 
   @session_key :user_token
 
@@ -40,6 +40,59 @@ defmodule GrangeWeb.DevController do
     else
       {:error, reason} when is_binary(reason) ->
         conn |> put_status(:bad_request) |> json(%{ok: false, error: reason})
+    end
+  end
+
+  @doc "Promotes the signed-in player to admin for e2e coverage."
+  def promote(conn, _params) do
+    case Accounts.resolve_token(get_session(conn, @session_key)) do
+      {:ok, user} ->
+        case Accounts.grant_admin(user.username) do
+          {:ok, admin} ->
+            json(conn, %{ok: true, user: admin})
+
+          {:error, reason} ->
+            conn |> put_status(:bad_request) |> json(%{ok: false, error: reason})
+        end
+
+      :error ->
+        unauthorized(conn)
+    end
+  end
+
+  @doc "Grants catalyst items to the signed-in player for e2e coverage."
+  def item(conn, params) do
+    case Accounts.resolve_token(get_session(conn, @session_key)) do
+      {:ok, user} ->
+        FarmStore.ensure(user.username)
+        grant_item(conn, user.username, params)
+
+      :error ->
+        unauthorized(conn)
+    end
+  end
+
+  defp grant_item(conn, owner, params) do
+    item = Map.get(params, "item")
+    count = Map.get(params, "count", 1)
+
+    if is_binary(item) and Crops.catalyst?(item) and is_integer(count) and count > 0 do
+      PlayerItems.add(owner, item, count)
+      json(conn, %{ok: true, items: PlayerItems.map(owner)})
+    else
+      conn |> put_status(:bad_request) |> json(%{ok: false, error: "invalid item"})
+    end
+  end
+
+  @doc "Forces every pending catalyst to resolve, for deterministic e2e tests."
+  def dawn(conn, _params) do
+    case Accounts.resolve_token(get_session(conn, @session_key)) do
+      {:ok, user} ->
+        FarmStore.ensure(user.username)
+        json(conn, %{ok: true, applied: FarmStore.apply_dawn_catalysts()})
+
+      :error ->
+        unauthorized(conn)
     end
   end
 

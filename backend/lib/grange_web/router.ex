@@ -35,6 +35,7 @@ defmodule GrangeWeb.Router do
     get("/inventory", InventoryController, :index)
     put("/inventory", InventoryController, :replace)
     post("/inventory/buy", InventoryController, :buy)
+    post("/admin/item", InventoryController, :admin_grant)
 
     post("/hardware/buy", HardwareController, :buy)
 
@@ -46,6 +47,9 @@ defmodule GrangeWeb.Router do
     if Application.compile_env(:grange, :enable_test_routes, false) do
       post("/reset", HealthController, :reset)
       post("/dev/npc", DevController, :npc)
+      post("/dev/admin", DevController, :promote)
+      post("/dev/item", DevController, :item)
+      post("/dev/dawn", DevController, :dawn)
       get("/auth/mailbox", AuthController, :mailbox)
     end
   end

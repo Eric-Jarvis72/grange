@@ -19,6 +19,19 @@ export type CropId =
 
 export type CropVariant = "standard" | "rare";
 
+export type CatalystItemId = "blizzard-vial" | "gilded-dust" | "sun-shard";
+
+export interface CatalystDef {
+	itemId: CatalystItemId;
+	name: string;
+	/** Crops this catalyst transforms. */
+	standardCrop: "wheat" | "lettuce" | "tomato";
+	/** Rare crop every matching standard tile becomes at dawn. */
+	rareCrop: CropId;
+	icon: string;
+	description: string;
+}
+
 /** Which tool can legally harvest a mature crop. */
 export type HarvestTool = "hand" | "scythe" | "both";
 
@@ -45,8 +58,6 @@ export interface CropDef {
 	regrowStage: number;
 	/** Grid-adjacency rule. */
 	synergy: SynergyKind;
-	/** Standard crops roll their rare variant seed on mature harvest. */
-	mutationSeed?: string;
 	/** Rare crops may drop this standard seed on harvest. */
 	bonusSeed?: string;
 	bonusSeedChance?: number;
@@ -54,6 +65,49 @@ export interface CropDef {
 	comboBonus?: number;
 	/** Keeps orthogonal neighbours watered while mature and unharvested. */
 	passiveWater?: boolean;
+}
+
+/**
+ * Overnight catalysts. Using one queues a dawn transformation for every matching
+ * standard crop on the farm. The server mirrors this map in `Grange.Crops`.
+ */
+export const CATALYSTS: Record<CatalystItemId, CatalystDef> = {
+	"blizzard-vial": {
+		itemId: "blizzard-vial",
+		name: "Blizzard Vial",
+		standardCrop: "lettuce",
+		rareCrop: "frost_lettuce",
+		icon: "/assets/Frost_Catalyst.png",
+		description:
+			"At dawn, turns every lettuce on your farm into Frost-Crisp Lettuce.",
+	},
+	"gilded-dust": {
+		itemId: "gilded-dust",
+		name: "Gilded Dust",
+		standardCrop: "wheat",
+		rareCrop: "midas_wheat",
+		icon: "/assets/Midas_Catalyst.png",
+		description: "At dawn, turns every wheat on your farm into Midas Wheat.",
+	},
+	"sun-shard": {
+		itemId: "sun-shard",
+		name: "Sun Shard",
+		standardCrop: "tomato",
+		rareCrop: "sunburst_tomato",
+		icon: "/assets/Sunburst_Catalyst.webp",
+		description:
+			"At dawn, turns every tomato on your farm into Sun-Burst Tomato.",
+	},
+};
+
+export const CATALYST_IDS = Object.keys(CATALYSTS) as CatalystItemId[];
+
+export function isCatalystItemId(value: unknown): value is CatalystItemId {
+	return typeof value === "string" && value in CATALYSTS;
+}
+
+export function catalystForItem(value: unknown): CatalystDef | null {
+	return isCatalystItemId(value) ? CATALYSTS[value] : null;
 }
 
 const stages5 = (crop: string, names: string[]): string[] =>
@@ -64,13 +118,7 @@ export const CROPS: Record<CropId, CropDef> = {
 		id: "wheat",
 		name: "Wheat",
 		variant: "standard",
-		stages: stages5("wheat", [
-			"seed",
-			"sprout",
-			"young",
-			"golden",
-			"mature",
-		]),
+		stages: stages5("wheat", ["seed", "sprout", "young", "golden", "mature"]),
 		harvested: "wheat_harvested.webp",
 		seedId: "wheat-seed",
 		seedCost: 2,
@@ -79,7 +127,6 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvests: 1,
 		regrowStage: -1,
 		synergy: "pack",
-		mutationSeed: "midas-wheat-seed",
 	},
 	lettuce: {
 		id: "lettuce",
@@ -94,7 +141,6 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvests: 1,
 		regrowStage: -1,
 		synergy: "moisture",
-		mutationSeed: "frost-lettuce-seed",
 	},
 	tomato: {
 		id: "tomato",
@@ -115,7 +161,6 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvests: 2,
 		regrowStage: 2,
 		synergy: "space",
-		mutationSeed: "sunburst-tomato-seed",
 	},
 	midas_wheat: {
 		id: "midas_wheat",
@@ -130,7 +175,7 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvested: "midas_wheat_harvested.webp",
 		seedId: "midas-wheat-seed",
 		seedCost: 0,
-		sellValue: 10,
+		sellValue: 30,
 		harvestTool: "scythe",
 		harvests: 1,
 		regrowStage: -1,
@@ -150,7 +195,7 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvested: "frost_lettuce_harvested.webp",
 		seedId: "frost-lettuce-seed",
 		seedCost: 0,
-		sellValue: 15,
+		sellValue: 45,
 		harvestTool: "both",
 		harvests: 1,
 		regrowStage: -1,
@@ -169,7 +214,7 @@ export const CROPS: Record<CropId, CropDef> = {
 		harvested: "sunburst_tomato_harvested.webp",
 		seedId: "sunburst-tomato-seed",
 		seedCost: 0,
-		sellValue: 8,
+		sellValue: 24,
 		harvestTool: "hand",
 		harvests: 3,
 		regrowStage: 1,

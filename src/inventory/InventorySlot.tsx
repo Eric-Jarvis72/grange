@@ -6,6 +6,8 @@ import {
 	serializeSlotRef,
 	SLOT_DRAG_TYPE,
 } from "./dragTypes";
+import { catalystForItem } from "../../shared/crops";
+import { activateCatalyst } from "./catalystUse";
 import {
 	useInventoryStore,
 	type SlotArea,
@@ -23,7 +25,13 @@ interface Props {
 	onReceiveBarn?: (payload: BarnDragPayload) => void;
 }
 
-export function InventorySlot({ area, index, selected, keyHint, onReceiveBarn }: Props) {
+export function InventorySlot({
+	area,
+	index,
+	selected,
+	keyHint,
+	onReceiveBarn,
+}: Props) {
 	const slot = useInventoryStore((s) =>
 		area === "grid" ? s.grid[index] : s.hotbar[index],
 	);
@@ -70,9 +78,14 @@ export function InventorySlot({ area, index, selected, keyHint, onReceiveBarn }:
 	}
 
 	function onContextMenu(e: React.MouseEvent) {
+		e.preventDefault();
+		// Catalysts are consumables; a right-click uses one instead of splitting.
+		if (slot.itemId && catalystForItem(slot.itemId)) {
+			activateCatalyst(slot.itemId);
+			return;
+		}
 		// Right-click a stackable slot to split half into the first empty
 		// slot (grid first, then hotbar). Simple and keyboard-testable.
-		e.preventDefault();
 		if (!slot.itemId || slot.count <= 1) return;
 		const { grid, hotbar } = useInventoryStore.getState();
 		const emptyGrid = grid.findIndex((s) => !s.itemId);

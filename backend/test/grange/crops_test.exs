@@ -68,15 +68,18 @@ defmodule Grange.CropsTest do
     assert_in_delta Crops.combo_mutation_multiplier(15), 1.5, 1.0e-9
   end
 
-  test "mutation chance caps at 0.6% under optimal conditions" do
-    assert_in_delta Crops.mutation_chance(0, false), 0.0015, 1.0e-9
-    assert_in_delta Crops.mutation_chance(0, true), 0.004, 1.0e-9
-    assert_in_delta Crops.mutation_chance(15, true), 0.006, 1.0e-9
+  test "rare crop sell values are triple the original prize" do
+    assert Crops.get("midas_wheat").sell_value == 30
+    assert Crops.get("frost_lettuce").sell_value == 45
+    assert Crops.get("sunburst_tomato").sell_value == 24
   end
 
-  test "mutation_drop only fires for standard crops and above the roll" do
-    assert Crops.mutation_drop("lettuce", 15, false, 0.0) == "frost-lettuce-seed"
-    assert Crops.mutation_drop("lettuce", 0, false, 0.999) == nil
-    assert Crops.mutation_drop("midas_wheat", 15, false, 0.0) == nil
+  test "catalysts map standard crops to their rare variants" do
+    assert Crops.catalyst("gilded-dust") == %{standard: "wheat", rare: "midas_wheat"}
+    assert Crops.catalyst("blizzard-vial") == %{standard: "lettuce", rare: "frost_lettuce"}
+    assert Crops.catalyst("sun-shard") == %{standard: "tomato", rare: "sunburst_tomato"}
+    assert Crops.catalyst("bogus") == nil
+    assert Crops.catalyst?("sun-shard")
+    refute Crops.catalyst?("bogus")
   end
 end

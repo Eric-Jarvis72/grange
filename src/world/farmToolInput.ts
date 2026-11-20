@@ -1,4 +1,6 @@
 import type * as ex from "excalibur";
+import { catalystForItem } from "../../shared/crops";
+import { activateCatalyst } from "../inventory/catalystUse";
 import { farmToolForItem } from "../inventory/items";
 import { isInventoryBlockingInput } from "../inventory/inventoryStore";
 import { useGameStore } from "../store";
@@ -63,6 +65,10 @@ export class FarmToolInput {
 		pointers.primary.on("down", (evt) => {
 			if (this.disabled()) return;
 			const item = selectedFarmItem();
+			if (item && catalystForItem(item)) {
+				activateCatalyst(item);
+				return;
+			}
 			if (this.host.barn.handleClick(evt.worldPos, item, this.host.farmProps)) return;
 			const farm = useGameStore.getState().activeFarm;
 			if (item && isMovablePropAsset(item) && farm) {

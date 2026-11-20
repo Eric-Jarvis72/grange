@@ -1,11 +1,6 @@
 import type { CropId } from "../../shared/crops";
 import { countItem, useInventoryStore } from "../inventory/inventoryStore";
-import {
-	cropForSeedItem,
-	farmToolForItem,
-	ITEMS,
-	type ItemId,
-} from "../inventory/items";
+import { cropForSeedItem, farmToolForItem } from "../inventory/items";
 import { emitFarmAction, type FarmActionAck } from "../socket";
 import { useGameStore } from "../store";
 import type { ComboController } from "./farmCombo";
@@ -37,7 +32,11 @@ export function performFarmAction(
 	const inventory = useInventoryStore.getState();
 	const item = inventory.hotbar[inventory.selectedHotbar]?.itemId ?? null;
 	const tool = farmToolForItem(item);
-	if (tool === "hoe" && !tile && !ownsFarmTile(column, row, farm?.land_level ?? 0)) {
+	if (
+		tool === "hoe" &&
+		!tile &&
+		!ownsFarmTile(column, row, farm?.land_level ?? 0)
+	) {
 		feedback.message("Buy this land from the mayor first.");
 		return;
 	}
@@ -68,11 +67,6 @@ export function performFarmAction(
 		if (res.seeds) useInventoryStore.getState().hydrateSeeds(res.seeds);
 		if (!res.ok) {
 			feedback.message(res.error ?? "Action failed.");
-			return;
-		}
-		for (const drop of res.drops ?? []) {
-			const name = ITEMS[drop as ItemId]?.name ?? drop;
-			feedback.message(`Rare ${name}!`);
 		}
 	};
 
@@ -93,7 +87,6 @@ export function performFarmAction(
 			y: row,
 			crop,
 			tool: plan.tool,
-			comboMutationMultiplier: combo.mutationMultiplier,
 		},
 		onAck,
 	);
@@ -111,7 +104,6 @@ function spread(
 	if (plan.kind !== "water" && plan.tool !== "scythe") return;
 	const farm = useGameStore.getState().activeFarm;
 	const kind = plan.kind === "water" ? "water" : "harvest";
-	const multiplier = combo.mutationMultiplier;
 	maybeSpread(
 		combo.current,
 		farm?.tiles ?? [],
@@ -119,12 +111,7 @@ function spread(
 		row,
 		kind,
 		plan.tool,
-		(x, y, tool) =>
-			emitFarmAction(
-				owner,
-				{ kind, x, y, tool, comboMutationMultiplier: multiplier },
-				onAck,
-			),
+		(x, y, tool) => emitFarmAction(owner, { kind, x, y, tool }, onAck),
 	);
 }
 
